@@ -1,0 +1,46 @@
+server:
+  port: ${SERVER_PORT}
+  servlet:
+    context-path: ${CONTEXT_PATH}
+
+spring:
+  application:
+    name: ${APP_NAME}
+
+  # Tự động đọc file .env ở thư mục gốc
+  config:
+    import: optional:file:.env[.properties]
+
+  # 1. Cấu hình Database (PostgreSQL)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
+
+  # 2. Cấu hình Hibernate (Tự động sinh bảng)
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+# 3. Cấu hình Swagger UI (Tài liệu API cho FE)
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
+  show-actuator: false
+  default-produces-media-type: application/json
+  servers:
+    - url: http://localhost:${SERVER_PORT}${CONTEXT_PATH}
+      description: Local Development
