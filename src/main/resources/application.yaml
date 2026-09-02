@@ -16,7 +16,6 @@ spring:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
-    driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
 
@@ -28,7 +27,6 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
 
 # 3. Cấu hình Swagger UI (Tài liệu API cho FE)
 springdoc:
