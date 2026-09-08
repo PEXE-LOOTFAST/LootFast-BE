@@ -4,6 +4,7 @@ import com.lootfast.backend.auth.exception.DuplicateUserException;
 import com.lootfast.backend.auth.exception.InvalidCredentialsException;
 import com.lootfast.backend.auth.exception.PasswordMismatchException;
 import com.lootfast.backend.common.dto.ApiErrorResponse;
+import com.lootfast.backend.user.exception.AuthenticatedUserNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -65,6 +66,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(
             InvalidCredentialsException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(
+                HttpStatus.UNAUTHORIZED,
+                exception.getMessage(),
+                request.getRequestURI(),
+                Map.of()
+        );
+    }
+
+    @ExceptionHandler(AuthenticatedUserNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleAuthenticatedUserNotFound(
+            AuthenticatedUserNotFoundException exception,
             HttpServletRequest request
     ) {
         return buildResponse(
