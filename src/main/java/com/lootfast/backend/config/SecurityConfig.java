@@ -1,14 +1,28 @@
 package com.lootfast.backend.config;
 
+import com.lootfast.backend.security.ApiSecurityErrorHandler;
+import com.lootfast.backend.security.JwtRoleConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
+
+    private final JwtRoleConverter jwtRoleConverter;
+    private final ApiSecurityErrorHandler apiSecurityErrorHandler;
+
+    public SecurityConfig(
+            JwtRoleConverter jwtRoleConverter,
+            ApiSecurityErrorHandler apiSecurityErrorHandler
+    ) {
+        this.jwtRoleConverter = jwtRoleConverter;
+        this.apiSecurityErrorHandler = apiSecurityErrorHandler;
+    }
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -27,7 +41,15 @@ public class SecurityConfig {
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(apiSecurityErrorHandler)
+                        .accessDeniedHandler(apiSecurityErrorHandler)
+                )
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .authenticationEntryPoint(apiSecurityErrorHandler)
+                        .accessDeniedHandler(apiSecurityErrorHandler)
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtRoleConverter))
+                )
                 .build();
     }
 }
