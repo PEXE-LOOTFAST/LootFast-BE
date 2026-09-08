@@ -1,6 +1,7 @@
 package com.lootfast.backend.common.exception;
 
 import com.lootfast.backend.auth.exception.DuplicateUserException;
+import com.lootfast.backend.auth.exception.InvalidCredentialsException;
 import com.lootfast.backend.auth.exception.PasswordMismatchException;
 import com.lootfast.backend.common.dto.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -55,6 +56,19 @@ public class GlobalExceptionHandler {
     ) {
         return buildResponse(
                 HttpStatus.CONFLICT,
+                exception.getMessage(),
+                request.getRequestURI(),
+                Map.of()
+        );
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(
+            InvalidCredentialsException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(
+                HttpStatus.UNAUTHORIZED,
                 exception.getMessage(),
                 request.getRequestURI(),
                 Map.of()
