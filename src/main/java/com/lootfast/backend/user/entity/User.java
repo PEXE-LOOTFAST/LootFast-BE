@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(
@@ -26,6 +27,9 @@ public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "public_id", nullable = false, unique = true, updatable = false)
+    private UUID publicId;
 
     @Column(nullable = false)
     private String email;
@@ -46,6 +50,10 @@ public class User {
     @Column(nullable = false)
     private UserRole role;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserStatus status;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -58,7 +66,8 @@ public class User {
             String email,
             String phoneNumber,
             String passwordHash,
-            UserRole role
+            UserRole role,
+            UserStatus status
     ) {
         this.firstName = firstName;
         this.lastName = lastName;
@@ -66,15 +75,21 @@ public class User {
         this.phoneNumber = phoneNumber;
         this.passwordHash = passwordHash;
         this.role = role;
+        this.status = status;
     }
 
     @PrePersist
     private void beforeInsert() {
         createdAt = Instant.now();
+        publicId = UUID.randomUUID();
     }
 
     public Long getId() {
         return id;
+    }
+
+    public UUID getPublicId() {
+        return publicId;
     }
 
     public String getFirstName() {
@@ -99,6 +114,14 @@ public class User {
 
     public UserRole getRole() {
         return role;
+    }
+
+    public UserStatus getStatus() {
+        return status;
+    }
+
+    public void verify() {
+        this.status = UserStatus.VERIFIED;
     }
 
     public Instant getCreatedAt() {

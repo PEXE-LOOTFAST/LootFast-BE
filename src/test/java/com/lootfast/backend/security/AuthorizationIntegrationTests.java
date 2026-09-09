@@ -1,6 +1,7 @@
 package com.lootfast.backend.security;
 
 import com.jayway.jsonpath.JsonPath;
+import com.lootfast.backend.auth.service.OtpService;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,13 +13,19 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -30,6 +37,11 @@ class AuthorizationIntegrationTests {
 
     @Autowired
     private UserRepository userRepository;
+
+    // Mock OtpService để signup không gọi Redis thật trong integration test.
+    // Test này chỉ kiểm tra authorization flow, không test OTP.
+    @MockitoBean
+    private OtpService otpService;
 
     @BeforeEach
     void setUp() {
@@ -43,58 +55,65 @@ class AuthorizationIntegrationTests {
         mockMvc.perform(get("/api/v1/users/me")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.firstName").value("Kien"))
-                .andExpect(jsonPath("$.lastName").value("Nguyen Van"))
-                .andExpect(jsonPath("$.email").value("kien@gmail.com"))
-                .andExpect(jsonPath("$.phoneNumber").value("912345678"))
-                .andExpect(jsonPath("$.role").value("BUYER"))
-                .andExpect(jsonPath("$.createdAt").exists());
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.firstName").value("Kien"))
+                .andExpect(jsonPath("$.data.lastName").value("Nguyen Van"))
+                .andExpect(jsonPath("$.data.email").value("kien@gmail.com"))
+                .andExpect(jsonPath("$.data.phoneNumber").value("912345678"))
+                .andExpect(jsonPath("$.data.role").value("BUYER"))
+                .andExpect(jsonPath("$.data.createdAt").exists())
+                .andExpect(jsonPath("$.traceId").exists());
     }
 
     @Test
-    void currentUserReturnsJsonUnauthorizedWithoutToken() throws Exception {
-        mockMvc.perform(get("/api/v1/users/me"))
+    void currentUserReturnsUnauthorizedWithoutToken() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/v1/users/me"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.status").value(401))
-                .andExpect(jsonPath("$.error").value("Unauthorized"))
-                .andExpect(jsonPath("$.message").value("Authentication is required"))
-                .andExpect(jsonPath("$.path").value("/api/v1/users/me"));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.error.message").value("Authentication is required"))
+                .andExpect(header().exists("X-Trace-Id"))
+                .andReturn();
+
+        assertResponseTraceMatchesHeader(result);
     }
 
     @Test
-    void currentUserReturnsJsonUnauthorizedForInvalidToken() throws Exception {
+    void currentUserReturnsUnauthorizedForInvalidToken() throws Exception {
         mockMvc.perform(get("/api/v1/users/me")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer invalid-token"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.status").value(401))
-                .andExpect(jsonPath("$.error").value("Unauthorized"))
-                .andExpect(jsonPath("$.message").value("Authentication is required"))
-                .andExpect(jsonPath("$.path").value("/api/v1/users/me"));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
     }
 
     @Test
-    void currentUserReturnsUnauthorizedWhenTokenUserWasDeleted() throws Exception {
+    void currentUserReturnsUnauthorizedWhenUserWasDeleted() throws Exception {
         String token = signupAndSignin();
         userRepository.deleteAll();
 
         mockMvc.perform(get("/api/v1/users/me")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message")
+                .andExpect(jsonPath("$.error.code").value("USER_NOT_FOUND"))
+                .andExpect(jsonPath("$.error.message")
                         .value("Authenticated user is no longer available"));
     }
 
     @Test
-    void buyerReceivesJsonForbiddenFromMerchantOnlyEndpoint() throws Exception {
+    void buyerReceivesForbiddenFromMerchantOnlyEndpoint() throws Exception {
         String token = signupAndSignin();
 
-        mockMvc.perform(get("/test/merchant-only")
+        MvcResult result = mockMvc.perform(get("/test/merchant-only")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.status").value(403))
-                .andExpect(jsonPath("$.error").value("Forbidden"))
-                .andExpect(jsonPath("$.message").value("Access is denied"))
-                .andExpect(jsonPath("$.path").value("/test/merchant-only"));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("ACCESS_DENIED"))
+                .andExpect(jsonPath("$.error.message").value("Access is denied"))
+                .andExpect(header().exists("X-Trace-Id"))
+                .andReturn();
+
+        assertResponseTraceMatchesHeader(result);
     }
 
     private String signupAndSignin() throws Exception {
@@ -102,16 +121,21 @@ class AuthorizationIntegrationTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(signupRequest()))
                 .andExpect(status().isCreated());
+        verify(otpService).sendSignupOtp("kien@gmail.com");
 
-        String responseBody = mockMvc.perform(post("/api/v1/auth/signin")
+        // Bypass OTP trong integration test: set VERIFIED thẳng qua repository
+        userRepository.findByEmailIgnoreCase("kien@gmail.com").ifPresent(user -> {
+            user.verify();
+            userRepository.save(user);
+        });
+
+        String body = mockMvc.perform(post("/api/v1/auth/signin")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(signinRequest()))
                 .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+                .andReturn().getResponse().getContentAsString();
 
-        return JsonPath.read(responseBody, "$.accessToken");
+        return JsonPath.read(body, "$.data.accessToken");
     }
 
     private String signupRequest() {
@@ -129,16 +153,19 @@ class AuthorizationIntegrationTests {
 
     private String signinRequest() {
         return """
-                {
-                  "email": "kien@gmail.com",
-                  "password": "password123"
-                }
+                {"email": "kien@gmail.com", "password": "password123"}
                 """;
+    }
+
+    private void assertResponseTraceMatchesHeader(MvcResult result) throws Exception {
+        String headerTraceId = result.getResponse().getHeader("X-Trace-Id");
+        String bodyTraceId = JsonPath.read(result.getResponse().getContentAsString(), "$.traceId");
+        assertNotEquals("no-trace", bodyTraceId);
+        assertEquals(headerTraceId, bodyTraceId);
     }
 
     @RestController
     static class MerchantOnlyTestController {
-
         @GetMapping("/test/merchant-only")
         @PreAuthorize("hasRole('MERCHANT')")
         String merchantOnly() {

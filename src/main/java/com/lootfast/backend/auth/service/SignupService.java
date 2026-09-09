@@ -2,12 +2,15 @@ package com.lootfast.backend.auth.service;
 
 import com.lootfast.backend.auth.dto.SignupRequest;
 import com.lootfast.backend.auth.dto.SignupResponse;
-import com.lootfast.backend.auth.exception.DuplicateUserException;
-import com.lootfast.backend.auth.exception.PasswordMismatchException;
+import com.lootfast.backend.auth.event.SignupCreatedEvent;
+import com.lootfast.backend.common.exception.ApiException;
+import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserRole;
+import com.lootfast.backend.user.entity.UserStatus;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,48 +21,53 @@ public class SignupService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public SignupService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public SignupService(UserRepository userRepository,
+                         PasswordEncoder passwordEncoder,
+                         ApplicationEventPublisher eventPublisher) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
     public SignupResponse signup(SignupRequest request) {
         if (!request.password().equals(request.confirmPassword())) {
-            throw new PasswordMismatchException("Password confirmation does not match");
+            throw new ApiException(ErrorCode.PASSWORD_MISMATCH,
+                    "Password confirmation does not match");
         }
 
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
-        String normalizedPhoneNumber = request.phoneNumber().trim();
+        String normalizedPhone = request.phoneNumber().trim();
 
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
-            throw new DuplicateUserException("Email is already registered");
+            throw new ApiException(ErrorCode.DUPLICATE_EMAIL, "Email is already registered");
         }
 
-        if (userRepository.existsByPhoneNumber(normalizedPhoneNumber)) {
-            throw new DuplicateUserException("Phone number is already registered");
+        if (userRepository.existsByPhoneNumber(normalizedPhone)) {
+            throw new ApiException(ErrorCode.DUPLICATE_PHONE,
+                    "Phone number is already registered");
         }
 
         User user = new User(
                 request.firstName().trim(),
                 request.lastName().trim(),
                 normalizedEmail,
-                normalizedPhoneNumber,
+                normalizedPhone,
                 passwordEncoder.encode(request.password()),
-                UserRole.BUYER
+                UserRole.BUYER,
+                UserStatus.UNVERIFIED
         );
 
-        User savedUser = userRepository.save(user);
+        userRepository.save(user);
+
+        // Listener chỉ xử lý sau khi transaction tạo user commit thành công.
+        eventPublisher.publishEvent(new SignupCreatedEvent(normalizedEmail));
 
         return new SignupResponse(
-                savedUser.getId(),
-                savedUser.getFirstName(),
-                savedUser.getLastName(),
-                savedUser.getEmail(),
-                savedUser.getPhoneNumber(),
-                savedUser.getRole(),
-                savedUser.getCreatedAt()
+                "Verification code sent to " + normalizedEmail,
+                normalizedEmail
         );
     }
 }

@@ -2,7 +2,8 @@ package com.lootfast.backend.auth.service;
 
 import com.lootfast.backend.auth.dto.SigninRequest;
 import com.lootfast.backend.auth.dto.SigninResponse;
-import com.lootfast.backend.auth.exception.InvalidCredentialsException;
+import com.lootfast.backend.common.exception.ApiException;
+import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -14,17 +15,13 @@ import java.util.Locale;
 @Service
 public class SigninService {
 
-    private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid email or password";
-
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
-    public SigninService(
-            UserRepository userRepository,
-            PasswordEncoder passwordEncoder,
-            JwtService jwtService
-    ) {
+    public SigninService(UserRepository userRepository,
+                         PasswordEncoder passwordEncoder,
+                         JwtService jwtService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
@@ -33,28 +30,31 @@ public class SigninService {
     @Transactional(readOnly = true)
     public SigninResponse signin(SigninRequest request) {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
+
         User user = userRepository.findByEmailIgnoreCase(normalizedEmail)
-                .orElseThrow(this::invalidCredentials);
+                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_CREDENTIALS,
+                        "Invalid email or password"));
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw invalidCredentials();
+            throw new ApiException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
         }
 
-        JwtService.IssuedToken accessToken = jwtService.issueAccessToken(user);
+        // Check sau password để không lộ thông tin: email tồn tại mà chưa verify
+        if (user.getStatus() == com.lootfast.backend.user.entity.UserStatus.UNVERIFIED) {
+            throw new ApiException(ErrorCode.ACCOUNT_NOT_VERIFIED,
+                    "Please verify your email before signing in");
+        }
+
+        JwtService.IssuedToken token = jwtService.issueAccessToken(user);
 
         return new SigninResponse(
-                accessToken.value(),
+                token.value(),
                 "Bearer",
-                accessToken.expiresInSeconds(),
-                user.getId(),
+                token.expiresInSeconds(),
                 user.getFirstName(),
                 user.getLastName(),
                 user.getEmail(),
                 user.getRole()
         );
-    }
-
-    private InvalidCredentialsException invalidCredentials() {
-        return new InvalidCredentialsException(INVALID_CREDENTIALS_MESSAGE);
     }
 }

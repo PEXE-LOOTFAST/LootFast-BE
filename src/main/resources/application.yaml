@@ -19,10 +19,38 @@ spring:
     hikari:
       maximum-pool-size: 5
 
-  # 2. Cấu hình Hibernate (Tự động sinh bảng)
+  # 2. Redis
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  # 3. Mail (Gmail SMTP)
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_APP_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  # Flyway quản lý schema production. baseline-version 0 cho phép database
+  # tạo bởi các phiên bản cũ chạy migration V1 thay vì bị từ chối khởi động.
+  flyway:
+    enabled: true
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:true}
+    baseline-version: 0
+    validate-on-migrate: true
+
+  # Hibernate chỉ kiểm tra entity khớp schema, không tự ý sửa database.
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
@@ -49,3 +77,5 @@ security:
   jwt:
     secret: ${JWT_SECRET}
     access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:15m}
+  otp:
+    hmac-secret: ${OTP_HMAC_SECRET}

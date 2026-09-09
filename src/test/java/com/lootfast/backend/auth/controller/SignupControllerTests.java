@@ -1,17 +1,14 @@
 package com.lootfast.backend.auth.controller;
 
 import com.lootfast.backend.auth.dto.SignupResponse;
-import com.lootfast.backend.auth.exception.DuplicateUserException;
-import com.lootfast.backend.auth.exception.PasswordMismatchException;
 import com.lootfast.backend.auth.service.SignupService;
+import com.lootfast.backend.common.exception.ApiException;
+import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.common.exception.GlobalExceptionHandler;
-import com.lootfast.backend.user.entity.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-
-import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -35,73 +32,65 @@ class SignupControllerTests {
     }
 
     @Test
-    void signupReturnsCreatedUser() throws Exception {
-        SignupResponse response = new SignupResponse(
-                1L,
-                "Kien",
-                "Nguyen Van",
-                "kien@gmail.com",
-                "912345678",
-                UserRole.BUYER,
-                Instant.parse("2026-09-06T08:00:00Z")
-        );
-        when(signupService.signup(any())).thenReturn(response);
+    void signupReturnsOtpSentMessage() throws Exception {
+        when(signupService.signup(any())).thenReturn(
+                new SignupResponse("Verification code sent to kien@gmail.com", "kien@gmail.com"));
 
         mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.email").value("kien@gmail.com"))
-                .andExpect(jsonPath("$.role").value("BUYER"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.email").value("kien@gmail.com"))
+                .andExpect(jsonPath("$.data.message").exists())
+                .andExpect(jsonPath("$.traceId").exists());
     }
 
     @Test
     void signupReturnsBadRequestForInvalidFields() throws Exception {
-        String invalidRequest = """
-                {
-                  "firstName": "Kien",
-                  "lastName": "Nguyen Van",
-                  "email": "kien@yahoo.com",
-                  "phoneNumber": "123",
-                  "password": "password123",
-                  "confirmPassword": "password123"
-                }
-                """;
-
         mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalidRequest))
+                        .content("""
+                                {
+                                  "firstName": "Kien",
+                                  "lastName": "Nguyen Van",
+                                  "email": "kien@yahoo.com",
+                                  "phoneNumber": "123",
+                                  "password": "password123",
+                                  "confirmPassword": "password123"
+                                }
+                                """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Request validation failed"))
-                .andExpect(jsonPath("$.validationErrors.email").exists())
-                .andExpect(jsonPath("$.validationErrors.phoneNumber").exists());
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.fields.email").exists())
+                .andExpect(jsonPath("$.error.fields.phoneNumber").exists());
     }
 
     @Test
-    void signupReturnsConflictForDuplicateUser() throws Exception {
+    void signupReturnsConflictForDuplicateEmail() throws Exception {
         when(signupService.signup(any()))
-                .thenThrow(new DuplicateUserException("Email is already registered"));
+                .thenThrow(new ApiException(ErrorCode.DUPLICATE_EMAIL,
+                        "Email is already registered"));
 
         mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.status").value(409))
-                .andExpect(jsonPath("$.message").value("Email is already registered"));
+                .andExpect(jsonPath("$.error.code").value("DUPLICATE_EMAIL"));
     }
 
     @Test
     void signupReturnsBadRequestForPasswordMismatch() throws Exception {
         when(signupService.signup(any()))
-                .thenThrow(new PasswordMismatchException("Password confirmation does not match"));
+                .thenThrow(new ApiException(ErrorCode.PASSWORD_MISMATCH,
+                        "Password confirmation does not match"));
 
         mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message").value("Password confirmation does not match"));
+                .andExpect(jsonPath("$.error.code").value("PASSWORD_MISMATCH"));
     }
 
     private String validRequest() {
