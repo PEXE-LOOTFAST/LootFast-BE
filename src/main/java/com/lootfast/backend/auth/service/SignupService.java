@@ -2,6 +2,7 @@ package com.lootfast.backend.auth.service;
 
 import com.lootfast.backend.auth.dto.SignupRequest;
 import com.lootfast.backend.auth.dto.SignupResponse;
+import com.lootfast.backend.auth.event.SignupCreatedEvent;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.entity.User;
@@ -9,6 +10,7 @@ import com.lootfast.backend.user.entity.UserRole;
 import com.lootfast.backend.user.entity.UserStatus;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,14 +21,14 @@ public class SignupService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final OtpService otpService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public SignupService(UserRepository userRepository,
                          PasswordEncoder passwordEncoder,
-                         OtpService otpService) {
+                         ApplicationEventPublisher eventPublisher) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.otpService = otpService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -60,8 +62,8 @@ public class SignupService {
 
         userRepository.save(user);
 
-        // OtpService tự gửi email @Async — không block transaction này
-        otpService.sendOtp(normalizedEmail);
+        // Listener chỉ xử lý sau khi transaction tạo user commit thành công.
+        eventPublisher.publishEvent(new SignupCreatedEvent(normalizedEmail));
 
         return new SignupResponse(
                 "Verification code sent to " + normalizedEmail,

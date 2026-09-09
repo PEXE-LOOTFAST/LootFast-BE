@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.mail.MailException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -35,10 +36,10 @@ class GmailSmtpSender implements EmailSender {
             helper.setSubject("LootFast — Mã xác thực đăng ký");
             helper.setText(buildBody(otp), true);
             mailSender.send(message);
-            log.info("OTP email sent to {}", to);
-        } catch (MessagingException e) {
+            log.info("OTP email dispatched successfully");
+        } catch (MessagingException | MailException e) {
             // Async — caller đã trả response rồi, chỉ log để monitor
-            log.error("Failed to send OTP email to {}: {}", to, e.getMessage());
+            log.error("Failed to send OTP email", e);
         }
     }
 

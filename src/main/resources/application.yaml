@@ -24,7 +24,7 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD}
+      password: ${REDIS_PASSWORD:}
 
   # 3. Mail (Gmail SMTP)
   mail:
@@ -39,10 +39,18 @@ spring:
           starttls:
             enable: true
 
-  # 4. Cấu hình Hibernate (Tự động sinh bảng)
+  # Flyway quản lý schema production. baseline-version 0 cho phép database
+  # tạo bởi các phiên bản cũ chạy migration V1 thay vì bị từ chối khởi động.
+  flyway:
+    enabled: true
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:true}
+    baseline-version: 0
+    validate-on-migrate: true
+
+  # Hibernate chỉ kiểm tra entity khớp schema, không tự ý sửa database.
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:

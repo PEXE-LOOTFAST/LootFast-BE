@@ -1,23 +1,14 @@
 package com.lootfast.backend.auth.otp;
 
-import java.util.Optional;
-
 public interface OtpStore {
 
     void saveOtp(String email, String otpHash);
 
-    Optional<OtpEntry> findOtp(String email);
+    boolean saveInitialOtpIfAllowed(String email, String otpHash);
 
-    // Atomic increment — trả về số attempts mới sau khi tăng
-    long incrementAttempts(String email);
+    OtpCheckResult checkOtp(String email, String otpHash, int maxAttempts);
+
+    ResendPermit reserveResend(String email, int maxResends);
 
     void deleteOtp(String email);
-
-    // Resend cooldown: 60 giây giữa 2 lần gửi
-    boolean isResendCooldownActive(String email);
-
-    void setResendCooldown(String email);
-
-    // Resend count: tối đa 3 lần trong 15 phút
-    long incrementResendCount(String email);
 }

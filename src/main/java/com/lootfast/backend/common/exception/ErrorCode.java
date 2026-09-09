@@ -17,10 +17,9 @@ public enum ErrorCode {
     // --- User ---
     USER_NOT_FOUND(HttpStatus.UNAUTHORIZED),
 
-    // --- OTP (implement sau, khai báo trước để ErrorCode luôn complete) ---
+    // --- OTP ---
     OTP_EXPIRED(HttpStatus.BAD_REQUEST),
     OTP_INVALID(HttpStatus.BAD_REQUEST),
-    OTP_RATE_LIMIT(HttpStatus.TOO_MANY_REQUESTS),
 
     // --- Security (dùng bởi ApiSecurityErrorHandler) ---
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED),

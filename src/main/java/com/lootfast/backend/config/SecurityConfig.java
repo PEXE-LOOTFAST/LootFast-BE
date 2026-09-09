@@ -33,10 +33,10 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
-                                "/v1/auth/signup",
-                                "/v1/auth/signin",
-                                "/v1/auth/verify-otp",
-                                "/v1/auth/resend-otp",
+                                "/api/v1/auth/signup",
+                                "/api/v1/auth/signin",
+                                "/api/v1/auth/verify-otp",
+                                "/api/v1/auth/resend-otp",
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**"

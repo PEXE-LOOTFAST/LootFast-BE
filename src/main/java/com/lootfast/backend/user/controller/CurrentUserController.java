@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "User", description = "Thông tin tài khoản người dùng hiện tại")
 @RestController
-@RequestMapping("/v1/users")
+@RequestMapping("/api/v1/users")
 public class CurrentUserController {
 
     private final CurrentUserService currentUserService;

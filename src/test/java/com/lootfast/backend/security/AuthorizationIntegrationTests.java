@@ -8,31 +8,28 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(AuthorizationIntegrationTests.MerchantOnlyTestController.class)
-@TestPropertySource(properties = {
-        "spring.data.redis.host=localhost",
-        "spring.data.redis.port=6379",
-        "spring.data.redis.password=",
-        "spring.mail.host=localhost",
-        "security.otp.hmac-secret=test-secret-that-is-long-enough-32chars"
-})
 class AuthorizationIntegrationTests {
 
     @Autowired
@@ -43,7 +40,7 @@ class AuthorizationIntegrationTests {
 
     // Mock OtpService để signup không gọi Redis thật trong integration test.
     // Test này chỉ kiểm tra authorization flow, không test OTP.
-    @MockBean
+    @MockitoBean
     private OtpService otpService;
 
     @BeforeEach
@@ -70,11 +67,15 @@ class AuthorizationIntegrationTests {
 
     @Test
     void currentUserReturnsUnauthorizedWithoutToken() throws Exception {
-        mockMvc.perform(get("/api/v1/users/me"))
+        MvcResult result = mockMvc.perform(get("/api/v1/users/me"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
-                .andExpect(jsonPath("$.error.message").value("Authentication is required"));
+                .andExpect(jsonPath("$.error.message").value("Authentication is required"))
+                .andExpect(header().exists("X-Trace-Id"))
+                .andReturn();
+
+        assertResponseTraceMatchesHeader(result);
     }
 
     @Test
@@ -103,12 +104,16 @@ class AuthorizationIntegrationTests {
     void buyerReceivesForbiddenFromMerchantOnlyEndpoint() throws Exception {
         String token = signupAndSignin();
 
-        mockMvc.perform(get("/test/merchant-only")
+        MvcResult result = mockMvc.perform(get("/test/merchant-only")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("ACCESS_DENIED"))
-                .andExpect(jsonPath("$.error.message").value("Access is denied"));
+                .andExpect(jsonPath("$.error.message").value("Access is denied"))
+                .andExpect(header().exists("X-Trace-Id"))
+                .andReturn();
+
+        assertResponseTraceMatchesHeader(result);
     }
 
     private String signupAndSignin() throws Exception {
@@ -116,6 +121,7 @@ class AuthorizationIntegrationTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(signupRequest()))
                 .andExpect(status().isCreated());
+        verify(otpService).sendSignupOtp("kien@gmail.com");
 
         // Bypass OTP trong integration test: set VERIFIED thẳng qua repository
         userRepository.findByEmailIgnoreCase("kien@gmail.com").ifPresent(user -> {
@@ -149,6 +155,13 @@ class AuthorizationIntegrationTests {
         return """
                 {"email": "kien@gmail.com", "password": "password123"}
                 """;
+    }
+
+    private void assertResponseTraceMatchesHeader(MvcResult result) throws Exception {
+        String headerTraceId = result.getResponse().getHeader("X-Trace-Id");
+        String bodyTraceId = JsonPath.read(result.getResponse().getContentAsString(), "$.traceId");
+        assertNotEquals("no-trace", bodyTraceId);
+        assertEquals(headerTraceId, bodyTraceId);
     }
 
     @RestController

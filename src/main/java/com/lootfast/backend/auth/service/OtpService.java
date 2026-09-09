@@ -2,7 +2,7 @@ package com.lootfast.backend.auth.service;
 
 public interface OtpService {
 
-    void sendOtp(String email);
+    void sendSignupOtp(String email);
 
     void verifyOtp(String email, String otp);
 
