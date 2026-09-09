@@ -1,8 +1,9 @@
 package com.lootfast.backend.auth.controller;
 
 import com.lootfast.backend.auth.dto.SigninResponse;
-import com.lootfast.backend.auth.exception.InvalidCredentialsException;
 import com.lootfast.backend.auth.service.SigninService;
+import com.lootfast.backend.common.exception.ApiException;
+import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.common.exception.GlobalExceptionHandler;
 import com.lootfast.backend.user.entity.UserRole;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,14 +35,8 @@ class SigninControllerTests {
     @Test
     void signinReturnsAccessToken() throws Exception {
         SigninResponse response = new SigninResponse(
-                "access-token",
-                "Bearer",
-                900,
-                1L,
-                "Kien",
-                "Nguyen Van",
-                "kien@gmail.com",
-                UserRole.BUYER
+                "access-token", "Bearer", 900,
+                "Kien", "Nguyen Van", "kien@gmail.com", UserRole.BUYER
         );
         when(signinService.signin(any())).thenReturn(response);
 
@@ -49,50 +44,46 @@ class SigninControllerTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").value("access-token"))
-                .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(900))
-                .andExpect(jsonPath("$.email").value("kien@gmail.com"))
-                .andExpect(jsonPath("$.role").value("BUYER"));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.accessToken").value("access-token"))
+                .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.data.expiresIn").value(900))
+                .andExpect(jsonPath("$.data.email").value("kien@gmail.com"))
+                .andExpect(jsonPath("$.data.role").value("BUYER"));
     }
 
     @Test
     void signinReturnsUnauthorizedForInvalidCredentials() throws Exception {
         when(signinService.signin(any()))
-                .thenThrow(new InvalidCredentialsException("Invalid email or password"));
+                .thenThrow(new ApiException(ErrorCode.INVALID_CREDENTIALS,
+                        "Invalid email or password"));
 
         mockMvc.perform(post("/api/v1/auth/signin")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.status").value(401))
-                .andExpect(jsonPath("$.message").value("Invalid email or password"));
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("INVALID_CREDENTIALS"))
+                .andExpect(jsonPath("$.error.message").value("Invalid email or password"));
     }
 
     @Test
     void signinReturnsBadRequestForInvalidFields() throws Exception {
-        String invalidRequest = """
-                {
-                  "email": "not-an-email",
-                  "password": ""
-                }
-                """;
-
         mockMvc.perform(post("/api/v1/auth/signin")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalidRequest))
+                        .content("""
+                                {"email": "not-an-email", "password": ""}
+                                """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Request validation failed"))
-                .andExpect(jsonPath("$.validationErrors.email").exists())
-                .andExpect(jsonPath("$.validationErrors.password").exists());
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.fields.email").exists())
+                .andExpect(jsonPath("$.error.fields.password").exists());
     }
 
     private String validRequest() {
         return """
-                {
-                  "email": "kien@gmail.com",
-                  "password": "password123"
-                }
+                {"email": "kien@gmail.com", "password": "password123"}
                 """;
     }
 }

@@ -1,9 +1,10 @@
 package com.lootfast.backend.user.service;
 
+import com.lootfast.backend.common.exception.ApiException;
+import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.dto.CurrentUserResponse;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserRole;
-import com.lootfast.backend.user.exception.AuthenticatedUserNotFoundException;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -36,9 +38,11 @@ class CurrentUserServiceTests {
     @Test
     void getCurrentUserReturnsLatestProfileFromDatabase() {
         User user = mock(User.class);
+        UUID publicId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
         Instant createdAt = Instant.parse("2026-09-08T08:00:00Z");
+
         when(userRepository.findById(42L)).thenReturn(Optional.of(user));
-        when(user.getId()).thenReturn(42L);
+        when(user.getPublicId()).thenReturn(publicId);
         when(user.getFirstName()).thenReturn("Kien");
         when(user.getLastName()).thenReturn("Nguyen Van");
         when(user.getEmail()).thenReturn("kien@gmail.com");
@@ -48,7 +52,7 @@ class CurrentUserServiceTests {
 
         CurrentUserResponse response = currentUserService.getCurrentUser("42");
 
-        assertEquals(42L, response.id());
+        assertEquals(publicId, response.publicId());
         assertEquals("Kien", response.firstName());
         assertEquals("Nguyen Van", response.lastName());
         assertEquals("kien@gmail.com", response.email());
@@ -59,11 +63,10 @@ class CurrentUserServiceTests {
 
     @Test
     void getCurrentUserRejectsInvalidTokenSubject() {
-        assertThrows(
-                AuthenticatedUserNotFoundException.class,
-                () -> currentUserService.getCurrentUser("not-a-user-id")
-        );
+        ApiException ex = assertThrows(ApiException.class,
+                () -> currentUserService.getCurrentUser("not-a-number"));
 
+        assertEquals(ErrorCode.USER_NOT_FOUND, ex.getErrorCode());
         verifyNoInteractions(userRepository);
     }
 
@@ -71,11 +74,10 @@ class CurrentUserServiceTests {
     void getCurrentUserRejectsDeletedUser() {
         when(userRepository.findById(42L)).thenReturn(Optional.empty());
 
-        AuthenticatedUserNotFoundException exception = assertThrows(
-                AuthenticatedUserNotFoundException.class,
-                () -> currentUserService.getCurrentUser("42")
-        );
+        ApiException ex = assertThrows(ApiException.class,
+                () -> currentUserService.getCurrentUser("42"));
 
-        assertEquals("Authenticated user is no longer available", exception.getMessage());
+        assertEquals(ErrorCode.USER_NOT_FOUND, ex.getErrorCode());
+        assertEquals("Authenticated user is no longer available", ex.getMessage());
     }
 }

@@ -1,109 +1,73 @@
 package com.lootfast.backend.common.exception;
 
-import com.lootfast.backend.auth.exception.DuplicateUserException;
-import com.lootfast.backend.auth.exception.InvalidCredentialsException;
-import com.lootfast.backend.auth.exception.PasswordMismatchException;
-import com.lootfast.backend.common.dto.ApiErrorResponse;
-import com.lootfast.backend.user.exception.AuthenticatedUserNotFoundException;
+import com.lootfast.backend.common.response.ApiError;
+import com.lootfast.backend.common.response.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.HttpStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    // Mọi lỗi nghiệp vụ đều là ApiException — một handler duy nhất thay vì N handler riêng lẻ
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<ApiResponse<Void>> handleApiException(
+            ApiException ex,
+            HttpServletRequest request
+    ) {
+        ApiError error = ApiError.of(ex.getErrorCode().name(), ex.getMessage());
+        return ResponseEntity
+                .status(ex.getErrorCode().getStatus())
+                .body(ApiResponse.error(error));
+    }
+
+    // Lỗi @Valid — trả về field errors để FE map sang thông báo tiếng Việt
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiErrorResponse> handleValidation(
-            MethodArgumentNotValidException exception,
+    public ResponseEntity<ApiResponse<Void>> handleValidation(
+            MethodArgumentNotValidException ex,
             HttpServletRequest request
     ) {
-        Map<String, String> validationErrors = new LinkedHashMap<>();
-        exception.getBindingResult().getFieldErrors().forEach(fieldError ->
-                validationErrors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage())
-        );
+        Map<String, String> fields = new LinkedHashMap<>();
+        ex.getBindingResult().getFieldErrors()
+                .forEach(fe -> fields.putIfAbsent(fe.getField(), fe.getDefaultMessage()));
 
-        return buildResponse(
-                HttpStatus.BAD_REQUEST,
-                "Request validation failed",
-                request.getRequestURI(),
-                validationErrors
-        );
+        ApiError error = ApiError.of(ErrorCode.VALIDATION_FAILED.name(),
+                "Request validation failed", fields);
+        return ResponseEntity
+                .status(ErrorCode.VALIDATION_FAILED.getStatus())
+                .body(ApiResponse.error(error));
     }
 
-    @ExceptionHandler(PasswordMismatchException.class)
-    public ResponseEntity<ApiErrorResponse> handlePasswordMismatch(
-            PasswordMismatchException exception,
+    // @PreAuthorize method-level ném AccessDeniedException — khác URL-level (do ApiSecurityErrorHandler xử lý)
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+        ApiError error = ApiError.of(ErrorCode.ACCESS_DENIED.name(), "Access is denied");
+        return ResponseEntity
+                .status(ErrorCode.ACCESS_DENIED.getStatus())
+                .body(ApiResponse.error(error));
+    }
+
+    // Catch-all — log đầy đủ cho dev, client chỉ nhận INTERNAL_ERROR (không lộ stack trace)
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnexpected(
+            Exception ex,
             HttpServletRequest request
     ) {
-        return buildResponse(
-                HttpStatus.BAD_REQUEST,
-                exception.getMessage(),
-                request.getRequestURI(),
-                Map.of()
-        );
-    }
-
-    @ExceptionHandler(DuplicateUserException.class)
-    public ResponseEntity<ApiErrorResponse> handleDuplicateUser(
-            DuplicateUserException exception,
-            HttpServletRequest request
-    ) {
-        return buildResponse(
-                HttpStatus.CONFLICT,
-                exception.getMessage(),
-                request.getRequestURI(),
-                Map.of()
-        );
-    }
-
-    @ExceptionHandler(InvalidCredentialsException.class)
-    public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(
-            InvalidCredentialsException exception,
-            HttpServletRequest request
-    ) {
-        return buildResponse(
-                HttpStatus.UNAUTHORIZED,
-                exception.getMessage(),
-                request.getRequestURI(),
-                Map.of()
-        );
-    }
-
-    @ExceptionHandler(AuthenticatedUserNotFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleAuthenticatedUserNotFound(
-            AuthenticatedUserNotFoundException exception,
-            HttpServletRequest request
-    ) {
-        return buildResponse(
-                HttpStatus.UNAUTHORIZED,
-                exception.getMessage(),
-                request.getRequestURI(),
-                Map.of()
-        );
-    }
-
-    private ResponseEntity<ApiErrorResponse> buildResponse(
-            HttpStatus status,
-            String message,
-            String path,
-            Map<String, String> validationErrors
-    ) {
-        ApiErrorResponse response = new ApiErrorResponse(
-                Instant.now(),
-                status.value(),
-                status.getReasonPhrase(),
-                message,
-                path,
-                validationErrors
-        );
-
-        return ResponseEntity.status(status).body(response);
+        log.error("Unexpected error on {} {}", request.getMethod(), request.getRequestURI(), ex);
+        ApiError error = ApiError.of(ErrorCode.INTERNAL_ERROR.name(),
+                "An unexpected error occurred");
+        return ResponseEntity
+                .status(ErrorCode.INTERNAL_ERROR.getStatus())
+                .body(ApiResponse.error(error));
     }
 }

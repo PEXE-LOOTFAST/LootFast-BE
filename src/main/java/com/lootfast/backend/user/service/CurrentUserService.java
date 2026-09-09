@@ -1,17 +1,15 @@
 package com.lootfast.backend.user.service;
 
+import com.lootfast.backend.common.exception.ApiException;
+import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.dto.CurrentUserResponse;
 import com.lootfast.backend.user.entity.User;
-import com.lootfast.backend.user.exception.AuthenticatedUserNotFoundException;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CurrentUserService {
-
-    private static final String USER_NOT_AVAILABLE_MESSAGE =
-            "Authenticated user is no longer available";
 
     private final UserRepository userRepository;
 
@@ -23,10 +21,11 @@ public class CurrentUserService {
     public CurrentUserResponse getCurrentUser(String subject) {
         Long userId = parseUserId(subject);
         User user = userRepository.findById(userId)
-                .orElseThrow(this::userNotAvailable);
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND,
+                        "Authenticated user is no longer available"));
 
         return new CurrentUserResponse(
-                user.getId(),
+                user.getPublicId(),
                 user.getFirstName(),
                 user.getLastName(),
                 user.getEmail(),
@@ -39,12 +38,9 @@ public class CurrentUserService {
     private Long parseUserId(String subject) {
         try {
             return Long.valueOf(subject);
-        } catch (NumberFormatException | NullPointerException exception) {
-            throw userNotAvailable();
+        } catch (NumberFormatException | NullPointerException e) {
+            throw new ApiException(ErrorCode.USER_NOT_FOUND,
+                    "Authenticated user is no longer available");
         }
-    }
-
-    private AuthenticatedUserNotFoundException userNotAvailable() {
-        return new AuthenticatedUserNotFoundException(USER_NOT_AVAILABLE_MESSAGE);
     }
 }
