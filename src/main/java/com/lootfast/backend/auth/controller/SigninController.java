@@ -29,7 +29,7 @@ public class SigninController {
     }
 
     @Operation(summary = "Đăng nhập",
-            description = "Trả về JWT access token. Tài khoản phải ở trạng thái VERIFIED mới đăng nhập được.")
+            description = "Trả về access token và refresh token. Tài khoản phải ở trạng thái VERIFIED mới đăng nhập được.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "200",
@@ -40,8 +40,10 @@ public class SigninController {
                                       "success": true,
                                       "data": {
                                         "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+                                        "refreshToken": "550e8400-e29b-41d4-a716-446655440000.secret",
                                         "tokenType": "Bearer",
                                         "expiresIn": 900,
+                                        "refreshExpiresIn": 2592000,
                                         "firstName": "Kien",
                                         "lastName": "Nguyen Van",
                                         "email": "kien@gmail.com",

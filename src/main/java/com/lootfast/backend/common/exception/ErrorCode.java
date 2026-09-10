@@ -6,6 +6,7 @@ public enum ErrorCode {
 
     // --- Validation ---
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST),
+    UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE),
 
     // --- Auth ---
     PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST),
@@ -13,6 +14,7 @@ public enum ErrorCode {
     DUPLICATE_PHONE(HttpStatus.CONFLICT),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED),
     ACCOUNT_NOT_VERIFIED(HttpStatus.FORBIDDEN),
+    INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED),
 
     // --- User ---
     USER_NOT_FOUND(HttpStatus.UNAUTHORIZED),

@@ -2,6 +2,7 @@ package com.lootfast.backend.auth.service;
 
 import com.lootfast.backend.auth.dto.SigninRequest;
 import com.lootfast.backend.auth.dto.SigninResponse;
+import com.lootfast.backend.auth.session.AuthSessionService;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.entity.User;
@@ -29,12 +30,18 @@ class SigninServiceTests {
     @Mock private UserRepository userRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtService jwtService;
+    @Mock private AuthSessionService authSessionService;
 
     private SigninService signinService;
 
     @BeforeEach
     void setUp() {
-        signinService = new SigninService(userRepository, passwordEncoder, jwtService);
+        signinService = new SigninService(
+                userRepository,
+                passwordEncoder,
+                jwtService,
+                authSessionService
+        );
     }
 
     @Test
@@ -45,13 +52,17 @@ class SigninServiceTests {
         when(passwordEncoder.matches("password123", "encoded-password")).thenReturn(true);
         when(jwtService.issueAccessToken(user))
                 .thenReturn(new JwtService.IssuedToken("access-token", 900));
+        when(authSessionService.createSession(user))
+                .thenReturn(new AuthSessionService.IssuedSession("refresh-token", 2_592_000));
 
         SigninResponse response = signinService.signin(
                 new SigninRequest(" Kien@Gmail.com ", "password123"));
 
         assertEquals("access-token", response.accessToken());
+        assertEquals("refresh-token", response.refreshToken());
         assertEquals("Bearer", response.tokenType());
         assertEquals(900, response.expiresIn());
+        assertEquals(2_592_000, response.refreshExpiresIn());
         assertEquals("kien@gmail.com", response.email());
         assertEquals(UserRole.BUYER, response.role());
     }
@@ -65,7 +76,7 @@ class SigninServiceTests {
                 () -> signinService.signin(new SigninRequest("missing@gmail.com", "password123")));
 
         assertEquals(ErrorCode.INVALID_CREDENTIALS, ex.getErrorCode());
-        verifyNoInteractions(passwordEncoder, jwtService);
+        verifyNoInteractions(passwordEncoder, jwtService, authSessionService);
     }
 
     @Test
@@ -80,6 +91,7 @@ class SigninServiceTests {
 
         assertEquals(ErrorCode.INVALID_CREDENTIALS, ex.getErrorCode());
         verify(jwtService, never()).issueAccessToken(user);
+        verify(authSessionService, never()).createSession(user);
     }
 
     private User user() {

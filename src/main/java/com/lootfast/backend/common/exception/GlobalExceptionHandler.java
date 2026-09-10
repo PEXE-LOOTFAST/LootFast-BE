@@ -6,7 +6,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -45,6 +47,32 @@ public class GlobalExceptionHandler {
                 "Request validation failed", fields);
         return ResponseEntity
                 .status(ErrorCode.VALIDATION_FAILED.getStatus())
+                .body(ApiResponse.error(error));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnreadableRequestBody(
+            HttpMessageNotReadableException ex
+    ) {
+        ApiError error = ApiError.of(
+                ErrorCode.VALIDATION_FAILED.name(),
+                "Request body is missing or malformed"
+        );
+        return ResponseEntity
+                .status(ErrorCode.VALIDATION_FAILED.getStatus())
+                .body(ApiResponse.error(error));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnsupportedMediaType(
+            HttpMediaTypeNotSupportedException ex
+    ) {
+        ApiError error = ApiError.of(
+                ErrorCode.UNSUPPORTED_MEDIA_TYPE.name(),
+                "Content-Type must be application/json"
+        );
+        return ResponseEntity
+                .status(ErrorCode.UNSUPPORTED_MEDIA_TYPE.getStatus())
                 .body(ApiResponse.error(error));
     }
 

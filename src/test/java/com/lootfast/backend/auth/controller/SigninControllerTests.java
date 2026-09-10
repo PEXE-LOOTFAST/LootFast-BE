@@ -35,7 +35,7 @@ class SigninControllerTests {
     @Test
     void signinReturnsAccessToken() throws Exception {
         SigninResponse response = new SigninResponse(
-                "access-token", "Bearer", 900,
+                "access-token", "refresh-token", "Bearer", 900, 2_592_000,
                 "Kien", "Nguyen Van", "kien@gmail.com", UserRole.BUYER
         );
         when(signinService.signin(any())).thenReturn(response);
@@ -46,8 +46,10 @@ class SigninControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.accessToken").value("access-token"))
+                .andExpect(jsonPath("$.data.refreshToken").value("refresh-token"))
                 .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.data.expiresIn").value(900))
+                .andExpect(jsonPath("$.data.refreshExpiresIn").value(2_592_000))
                 .andExpect(jsonPath("$.data.email").value("kien@gmail.com"))
                 .andExpect(jsonPath("$.data.role").value("BUYER"));
     }
