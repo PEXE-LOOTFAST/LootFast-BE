@@ -2,6 +2,7 @@ package com.lootfast.backend.auth.service;
 
 import com.lootfast.backend.auth.dto.SigninRequest;
 import com.lootfast.backend.auth.dto.SigninResponse;
+import com.lootfast.backend.auth.session.AuthSessionService;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.entity.User;
@@ -18,16 +19,19 @@ public class SigninService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AuthSessionService authSessionService;
 
     public SigninService(UserRepository userRepository,
                          PasswordEncoder passwordEncoder,
-                         JwtService jwtService) {
+                         JwtService jwtService,
+                         AuthSessionService authSessionService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.authSessionService = authSessionService;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public SigninResponse signin(SigninRequest request) {
         String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
 
@@ -46,11 +50,14 @@ public class SigninService {
         }
 
         JwtService.IssuedToken token = jwtService.issueAccessToken(user);
+        AuthSessionService.IssuedSession session = authSessionService.createSession(user);
 
         return new SigninResponse(
                 token.value(),
+                session.refreshToken(),
                 "Bearer",
                 token.expiresInSeconds(),
+                session.expiresInSeconds(),
                 user.getFirstName(),
                 user.getLastName(),
                 user.getEmail(),
