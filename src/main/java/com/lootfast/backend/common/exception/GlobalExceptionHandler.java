@@ -9,9 +9,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -73,6 +75,32 @@ public class GlobalExceptionHandler {
         );
         return ResponseEntity
                 .status(ErrorCode.UNSUPPORTED_MEDIA_TYPE.getStatus())
+                .body(ApiResponse.error(error));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(
+            MaxUploadSizeExceededException exception
+    ) {
+        ApiError error = ApiError.of(
+                ErrorCode.AVATAR_TOO_LARGE.name(),
+                "Avatar file must not exceed 5 MB"
+        );
+        return ResponseEntity
+                .status(ErrorCode.AVATAR_TOO_LARGE.getStatus())
+                .body(ApiResponse.error(error));
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingRequestPart(
+            MissingServletRequestPartException exception
+    ) {
+        ApiError error = ApiError.of(
+                ErrorCode.INVALID_AVATAR.name(),
+                "Avatar file is required"
+        );
+        return ResponseEntity
+                .status(ErrorCode.INVALID_AVATAR.getStatus())
                 .body(ApiResponse.error(error));
     }
 

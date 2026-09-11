@@ -6,8 +6,10 @@ import com.lootfast.backend.auth.event.SignupCreatedEvent;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.entity.User;
+import com.lootfast.backend.user.entity.UserProfile;
 import com.lootfast.backend.user.entity.UserRole;
 import com.lootfast.backend.user.entity.UserStatus;
+import com.lootfast.backend.user.repository.UserProfileRepository;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +33,7 @@ import static org.mockito.Mockito.when;
 class SignupServiceTests {
 
     @Mock private UserRepository userRepository;
+    @Mock private UserProfileRepository userProfileRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private ApplicationEventPublisher eventPublisher;
 
@@ -38,7 +41,12 @@ class SignupServiceTests {
 
     @BeforeEach
     void setUp() {
-        signupService = new SignupService(userRepository, passwordEncoder, eventPublisher);
+        signupService = new SignupService(
+                userRepository,
+                userProfileRepository,
+                passwordEncoder,
+                eventPublisher
+        );
     }
 
     @Test
@@ -58,6 +66,10 @@ class SignupServiceTests {
         assertEquals(UserRole.BUYER, saved.getRole());
         assertEquals(UserStatus.UNVERIFIED, saved.getStatus());
 
+        ArgumentCaptor<UserProfile> profileCaptor = ArgumentCaptor.forClass(UserProfile.class);
+        verify(userProfileRepository).save(profileCaptor.capture());
+        assertEquals("An Nguyen Van", profileCaptor.getValue().getDisplayName());
+
         verify(eventPublisher).publishEvent(new SignupCreatedEvent("new.user@gmail.com"));
 
         assertEquals("new.user@gmail.com", response.email());
@@ -72,7 +84,12 @@ class SignupServiceTests {
 
         ApiException ex = assertThrows(ApiException.class, () -> signupService.signup(request));
         assertEquals(ErrorCode.PASSWORD_MISMATCH, ex.getErrorCode());
-        verifyNoInteractions(userRepository, passwordEncoder, eventPublisher);
+        verifyNoInteractions(
+                userRepository,
+                userProfileRepository,
+                passwordEncoder,
+                eventPublisher
+        );
     }
 
     @Test
@@ -83,6 +100,7 @@ class SignupServiceTests {
         ApiException ex = assertThrows(ApiException.class, () -> signupService.signup(request));
         assertEquals(ErrorCode.DUPLICATE_EMAIL, ex.getErrorCode());
         verify(userRepository, never()).save(any());
+        verifyNoInteractions(userProfileRepository);
         verifyNoInteractions(eventPublisher);
     }
 
@@ -94,6 +112,7 @@ class SignupServiceTests {
         ApiException ex = assertThrows(ApiException.class, () -> signupService.signup(request));
         assertEquals(ErrorCode.DUPLICATE_PHONE, ex.getErrorCode());
         verify(userRepository, never()).save(any());
+        verifyNoInteractions(userProfileRepository);
         verifyNoInteractions(eventPublisher);
     }
 

@@ -2,6 +2,8 @@ package com.lootfast.backend.security;
 
 import com.jayway.jsonpath.JsonPath;
 import com.lootfast.backend.auth.service.OtpService;
+import com.lootfast.backend.common.storage.AvatarStorage;
+import com.lootfast.backend.common.storage.StoredAvatar;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -18,13 +21,21 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
 @SpringBootTest
@@ -42,6 +53,9 @@ class AuthorizationIntegrationTests {
     // Test này chỉ kiểm tra authorization flow, không test OTP.
     @MockitoBean
     private OtpService otpService;
+
+    @MockitoBean
+    private AvatarStorage avatarStorage;
 
     @BeforeEach
     void setUp() {
@@ -61,6 +75,11 @@ class AuthorizationIntegrationTests {
                 .andExpect(jsonPath("$.data.email").value("kien@gmail.com"))
                 .andExpect(jsonPath("$.data.phoneNumber").value("912345678"))
                 .andExpect(jsonPath("$.data.role").value("BUYER"))
+                .andExpect(jsonPath("$.data.displayName").value("Kien Nguyen Van"))
+                .andExpect(jsonPath("$.data.avatarUrl").isEmpty())
+                .andExpect(jsonPath("$.data.pickupArea").isEmpty())
+                .andExpect(jsonPath("$.data.favoriteCategories").isArray())
+                .andExpect(jsonPath("$.data.favoriteCategories").isEmpty())
                 .andExpect(jsonPath("$.data.createdAt").exists())
                 .andExpect(jsonPath("$.traceId").exists());
     }
@@ -98,6 +117,54 @@ class AuthorizationIntegrationTests {
                 .andExpect(jsonPath("$.error.code").value("USER_NOT_FOUND"))
                 .andExpect(jsonPath("$.error.message")
                         .value("Authenticated user is no longer available"));
+    }
+
+    @Test
+    void authenticatedUserCanUploadAvatarAndReadNewUrlFromProfile() throws Exception {
+        String token = signupAndSignin();
+        String avatarUrl = "https://res.cloudinary.com/demo/avatar.png";
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "avatar.png",
+                MediaType.IMAGE_PNG_VALUE,
+                pngImage()
+        );
+        when(avatarStorage.upload(any(), any())).thenReturn(new StoredAvatar(
+                "lootfast/user-avatars/test-user",
+                avatarUrl
+        ));
+
+        mockMvc.perform(multipart("/api/v1/users/me/avatar")
+                        .file(file)
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        })
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.avatarUrl").value(avatarUrl));
+
+        mockMvc.perform(get("/api/v1/users/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.avatarUrl").value(avatarUrl));
+    }
+
+    @Test
+    void avatarUploadRejectsMissingFilePart() throws Exception {
+        String token = signupAndSignin();
+
+        mockMvc.perform(multipart("/api/v1/users/me/avatar")
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        })
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("INVALID_AVATAR"))
+                .andExpect(jsonPath("$.error.message").value("Avatar file is required"));
     }
 
     @Test
@@ -155,6 +222,13 @@ class AuthorizationIntegrationTests {
         return """
                 {"email": "kien@gmail.com", "password": "password123"}
                 """;
+    }
+
+    private byte[] pngImage() throws IOException {
+        BufferedImage image = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", output);
+        return output.toByteArray();
     }
 
     private void assertResponseTraceMatchesHeader(MvcResult result) throws Exception {

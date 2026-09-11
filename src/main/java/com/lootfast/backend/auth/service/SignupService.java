@@ -6,8 +6,10 @@ import com.lootfast.backend.auth.event.SignupCreatedEvent;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.entity.User;
+import com.lootfast.backend.user.entity.UserProfile;
 import com.lootfast.backend.user.entity.UserRole;
 import com.lootfast.backend.user.entity.UserStatus;
+import com.lootfast.backend.user.repository.UserProfileRepository;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.context.ApplicationEventPublisher;
@@ -20,13 +22,16 @@ import java.util.Locale;
 public class SignupService {
 
     private final UserRepository userRepository;
+    private final UserProfileRepository userProfileRepository;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
 
     public SignupService(UserRepository userRepository,
+                         UserProfileRepository userProfileRepository,
                          PasswordEncoder passwordEncoder,
                          ApplicationEventPublisher eventPublisher) {
         this.userRepository = userRepository;
+        this.userProfileRepository = userProfileRepository;
         this.passwordEncoder = passwordEncoder;
         this.eventPublisher = eventPublisher;
     }
@@ -60,7 +65,11 @@ public class SignupService {
                 UserStatus.UNVERIFIED
         );
 
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        userProfileRepository.save(new UserProfile(
+                savedUser,
+                defaultDisplayName(savedUser)
+        ));
 
         // Listener chỉ xử lý sau khi transaction tạo user commit thành công.
         eventPublisher.publishEvent(new SignupCreatedEvent(normalizedEmail));
@@ -69,5 +78,9 @@ public class SignupService {
                 "Verification code sent to " + normalizedEmail,
                 normalizedEmail
         );
+    }
+
+    private String defaultDisplayName(User user) {
+        return user.getFirstName() + " " + user.getLastName();
     }
 }
