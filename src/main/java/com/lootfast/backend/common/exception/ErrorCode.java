@@ -18,6 +18,9 @@ public enum ErrorCode {
 
     // --- User ---
     USER_NOT_FOUND(HttpStatus.UNAUTHORIZED),
+    INVALID_AVATAR(HttpStatus.BAD_REQUEST),
+    AVATAR_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE),
+    AVATAR_UPLOAD_FAILED(HttpStatus.BAD_GATEWAY),
 
     // --- OTP ---
     OTP_EXPIRED(HttpStatus.BAD_REQUEST),

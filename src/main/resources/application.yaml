@@ -39,6 +39,11 @@ spring:
           starttls:
             enable: true
 
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
   # Flyway quản lý schema production. baseline-version 0 cho phép database
   # tạo bởi các phiên bản cũ chạy migration V1 thay vì bị từ chối khởi động.
   flyway:
@@ -81,3 +86,9 @@ security:
     expiration: ${REFRESH_TOKEN_EXPIRATION:30d}
   otp:
     hmac-secret: ${OTP_HMAC_SECRET}
+
+storage:
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
