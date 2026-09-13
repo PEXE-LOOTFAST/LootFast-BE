@@ -54,6 +54,7 @@ spring:
 
   # Hibernate chỉ kiểm tra entity khớp schema, không tự ý sửa database.
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: validate
     show-sql: true
@@ -68,7 +69,7 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     enabled: true
-    path: /swagger-ui.html
+    path: /swagger-ui
     operations-sorter: method
     tags-sorter: alpha
     display-request-duration: true

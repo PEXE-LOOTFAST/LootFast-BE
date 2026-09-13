@@ -47,7 +47,8 @@ public class SigninController {
                                         "firstName": "Kien",
                                         "lastName": "Nguyen Van",
                                         "email": "kien@gmail.com",
-                                        "role": "BUYER"
+                                        "role": "BUYER",
+                                        "roles": ["BUYER"]
                                       },
                                       "traceId": "abc-123",
                                       "timestamp": "2026-09-09T08:00:00Z"

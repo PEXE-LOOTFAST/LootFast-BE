@@ -2,12 +2,13 @@ package com.lootfast.backend.user.service;
 
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
-import com.lootfast.backend.common.storage.AvatarStorage;
-import com.lootfast.backend.common.storage.AvatarStorageException;
-import com.lootfast.backend.common.storage.StoredAvatar;
+import com.lootfast.backend.common.storage.ImageFileValidator;
+import com.lootfast.backend.common.storage.ImageStorage;
+import com.lootfast.backend.common.storage.ImageStorageException;
+import com.lootfast.backend.common.storage.ImageUploadPreset;
+import com.lootfast.backend.common.storage.StoredImage;
 import com.lootfast.backend.user.dto.AvatarResponse;
 import com.lootfast.backend.user.entity.User;
-import com.lootfast.backend.user.entity.UserProfile;
 import com.lootfast.backend.user.repository.UserProfileRepository;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,9 +27,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -39,7 +40,7 @@ class UserAvatarServiceTests {
 
     @Mock private UserRepository userRepository;
     @Mock private UserProfileRepository userProfileRepository;
-    @Mock private AvatarStorage avatarStorage;
+    @Mock private ImageStorage imageStorage;
 
     private UserAvatarService userAvatarService;
 
@@ -48,7 +49,8 @@ class UserAvatarServiceTests {
         userAvatarService = new UserAvatarService(
                 userRepository,
                 userProfileRepository,
-                avatarStorage
+                imageStorage,
+                new ImageFileValidator()
         );
     }
 
@@ -57,7 +59,6 @@ class UserAvatarServiceTests {
         UUID publicId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
         byte[] image = pngImage();
         User user = mock(User.class);
-        UserProfile profile = new UserProfile(user, "Kien");
         MultipartFile file = new MockMultipartFile(
                 "file",
                 "avatar.png",
@@ -67,18 +68,30 @@ class UserAvatarServiceTests {
 
         when(userRepository.findById(42L)).thenReturn(Optional.of(user));
         when(user.getPublicId()).thenReturn(publicId);
-        when(userProfileRepository.findByUserIdForUpdate(42L))
-                .thenReturn(Optional.of(profile));
-        when(avatarStorage.upload(publicId, image)).thenReturn(new StoredAvatar(
+        when(userProfileRepository.existsByUserId(42L)).thenReturn(true);
+        when(imageStorage.upload(
+                "lootfast/user-avatars/" + publicId,
+                image,
+                ImageUploadPreset.USER_AVATAR
+        )).thenReturn(new StoredImage(
                 "lootfast/user-avatars/" + publicId,
                 "https://res.cloudinary.com/demo/avatar.png"
         ));
+        when(userProfileRepository.updateAvatarByUserId(
+                eq(42L),
+                eq("lootfast/user-avatars/" + publicId),
+                eq("https://res.cloudinary.com/demo/avatar.png"),
+                any()
+        )).thenReturn(1);
 
         AvatarResponse response = userAvatarService.uploadAvatar("42", file);
 
         assertEquals("https://res.cloudinary.com/demo/avatar.png", response.avatarUrl());
-        assertEquals("https://res.cloudinary.com/demo/avatar.png", profile.getAvatarUrl());
-        verify(avatarStorage).upload(publicId, image);
+        verify(imageStorage).upload(
+                "lootfast/user-avatars/" + publicId,
+                image,
+                ImageUploadPreset.USER_AVATAR
+        );
     }
 
     @Test
@@ -96,7 +109,7 @@ class UserAvatarServiceTests {
         );
 
         assertEquals(ErrorCode.INVALID_AVATAR, exception.getErrorCode());
-        verifyNoInteractions(userRepository, userProfileRepository, avatarStorage);
+        verifyNoInteractions(userRepository, userProfileRepository, imageStorage);
     }
 
     @Test
@@ -114,7 +127,7 @@ class UserAvatarServiceTests {
         );
 
         assertEquals(ErrorCode.INVALID_AVATAR, exception.getErrorCode());
-        verifyNoInteractions(userRepository, userProfileRepository, avatarStorage);
+        verifyNoInteractions(userRepository, userProfileRepository, imageStorage);
     }
 
     @Test
@@ -129,7 +142,7 @@ class UserAvatarServiceTests {
         );
 
         assertEquals(ErrorCode.AVATAR_TOO_LARGE, exception.getErrorCode());
-        verifyNoInteractions(userRepository, userProfileRepository, avatarStorage);
+        verifyNoInteractions(userRepository, userProfileRepository, imageStorage);
     }
 
     @Test
@@ -137,7 +150,6 @@ class UserAvatarServiceTests {
         UUID publicId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
         byte[] image = pngImage();
         User user = mock(User.class);
-        UserProfile profile = new UserProfile(user, "Kien");
         MultipartFile file = new MockMultipartFile(
                 "file",
                 "avatar.png",
@@ -147,10 +159,9 @@ class UserAvatarServiceTests {
 
         when(userRepository.findById(42L)).thenReturn(Optional.of(user));
         when(user.getPublicId()).thenReturn(publicId);
-        when(userProfileRepository.findByUserIdForUpdate(42L))
-                .thenReturn(Optional.of(profile));
-        when(avatarStorage.upload(any(), any(byte[].class)))
-                .thenThrow(new AvatarStorageException("provider unavailable"));
+        when(userProfileRepository.existsByUserId(42L)).thenReturn(true);
+        when(imageStorage.upload(any(), any(byte[].class), any()))
+                .thenThrow(new ImageStorageException("provider unavailable"));
 
         ApiException exception = assertThrows(
                 ApiException.class,
@@ -158,7 +169,8 @@ class UserAvatarServiceTests {
         );
 
         assertEquals(ErrorCode.AVATAR_UPLOAD_FAILED, exception.getErrorCode());
-        assertNull(profile.getAvatarUrl());
+        verify(userProfileRepository, org.mockito.Mockito.never())
+                .updateAvatarByUserId(any(), any(), any(), any());
     }
 
     private byte[] pngImage() throws IOException {

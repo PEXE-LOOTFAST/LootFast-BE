@@ -11,7 +11,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -22,35 +21,30 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class CloudinaryAvatarStorageTests {
+class CloudinaryImageStorageTests {
 
     @Mock private Cloudinary cloudinary;
     @Mock private Uploader uploader;
 
     @Test
-    void uploadUsesDeterministicKeyAndNormalizesImage() throws IOException {
-        CloudinaryProperties properties = new CloudinaryProperties(
-                "demo",
-                "api-key",
-                "api-secret"
-        );
-        CloudinaryAvatarStorage storage = new CloudinaryAvatarStorage(
-                cloudinary,
-                properties
-        );
-        UUID publicId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+    void uploadUsesRequestedKeyAndPreset() throws IOException {
+        CloudinaryImageStorage storage = configuredStorage();
         byte[] content = new byte[]{1, 2, 3};
-        String storageKey = "lootfast/user-avatars/" + publicId;
+        String storageKey = "lootfast/merchant-profiles/user-id/logo";
         when(cloudinary.uploader()).thenReturn(uploader);
         when(uploader.upload(any(), any())).thenReturn(Map.of(
                 "public_id", storageKey,
-                "secure_url", "https://res.cloudinary.com/demo/avatar.png"
+                "secure_url", "https://res.cloudinary.com/demo/logo.png"
         ));
 
-        StoredAvatar result = storage.upload(publicId, content);
+        StoredImage result = storage.upload(
+                storageKey,
+                content,
+                ImageUploadPreset.MERCHANT_LOGO
+        );
 
         assertEquals(storageKey, result.storageKey());
-        assertEquals("https://res.cloudinary.com/demo/avatar.png", result.url());
+        assertEquals("https://res.cloudinary.com/demo/logo.png", result.url());
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> optionsCaptor = ArgumentCaptor.forClass(Map.class);
@@ -58,22 +52,36 @@ class CloudinaryAvatarStorageTests {
         Map<String, Object> options = optionsCaptor.getValue();
         assertEquals(storageKey, options.get("public_id"));
         assertEquals("image", options.get("resource_type"));
-        assertEquals("c_limit,h_1024,w_1024,q_auto", options.get("transformation"));
+        assertEquals(
+                ImageUploadPreset.MERCHANT_LOGO.transformation(),
+                options.get("transformation")
+        );
         assertEquals(true, options.get("overwrite"));
         assertEquals(true, options.get("invalidate"));
     }
 
     @Test
     void uploadFailsBeforeNetworkCallWhenCloudinaryIsNotConfigured() {
-        CloudinaryAvatarStorage storage = new CloudinaryAvatarStorage(
+        CloudinaryImageStorage storage = new CloudinaryImageStorage(
                 cloudinary,
                 new CloudinaryProperties("", "", "")
         );
 
         assertThrows(
-                AvatarStorageException.class,
-                () -> storage.upload(UUID.randomUUID(), new byte[]{1})
+                ImageStorageException.class,
+                () -> storage.upload(
+                        "lootfast/test/image",
+                        new byte[]{1},
+                        ImageUploadPreset.USER_AVATAR
+                )
         );
         verifyNoInteractions(cloudinary, uploader);
+    }
+
+    private CloudinaryImageStorage configuredStorage() {
+        return new CloudinaryImageStorage(
+                cloudinary,
+                new CloudinaryProperties("demo", "api-key", "api-secret")
+        );
     }
 }

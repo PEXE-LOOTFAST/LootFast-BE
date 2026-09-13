@@ -57,6 +57,7 @@ public class CurrentUserController {
                                         "email": "kien@gmail.com",
                                         "phoneNumber": "912345678",
                                         "role": "BUYER",
+                                        "roles": ["BUYER"],
                                         "displayName": "Kien Nguyen Van",
                                         "avatarUrl": null,
                                         "pickupArea": null,

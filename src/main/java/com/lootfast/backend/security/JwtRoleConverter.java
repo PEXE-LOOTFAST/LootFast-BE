@@ -10,6 +10,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Objects;
 
 @Component
 public class JwtRoleConverter implements Converter<Jwt, AbstractAuthenticationToken> {
@@ -18,20 +19,29 @@ public class JwtRoleConverter implements Converter<Jwt, AbstractAuthenticationTo
 
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
-        List<GrantedAuthority> authorities = toAuthorities(jwt.getClaimAsString("role"));
+        List<String> roleClaims = jwt.getClaimAsStringList("roles");
+        if (roleClaims == null || roleClaims.isEmpty()) {
+            String legacyRole = jwt.getClaimAsString("role");
+            roleClaims = legacyRole == null ? List.of() : List.of(legacyRole);
+        }
+        List<GrantedAuthority> authorities = roleClaims.stream()
+                .map(this::toAuthority)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
         return new JwtAuthenticationToken(jwt, authorities, jwt.getClaimAsString("email"));
     }
 
-    private List<GrantedAuthority> toAuthorities(String roleClaim) {
+    private GrantedAuthority toAuthority(String roleClaim) {
         if (roleClaim == null || roleClaim.isBlank()) {
-            return List.of();
+            return null;
         }
 
         try {
             UserRole role = UserRole.valueOf(roleClaim);
-            return List.of(new SimpleGrantedAuthority(ROLE_PREFIX + role.name()));
+            return new SimpleGrantedAuthority(ROLE_PREFIX + role.name());
         } catch (IllegalArgumentException exception) {
-            return List.of();
+            return null;
         }
     }
 }

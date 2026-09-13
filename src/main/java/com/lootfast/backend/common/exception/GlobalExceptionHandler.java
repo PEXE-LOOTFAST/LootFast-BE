@@ -3,14 +3,18 @@ package com.lootfast.backend.common.exception;
 import com.lootfast.backend.common.response.ApiError;
 import com.lootfast.backend.common.response.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -71,7 +75,7 @@ public class GlobalExceptionHandler {
     ) {
         ApiError error = ApiError.of(
                 ErrorCode.UNSUPPORTED_MEDIA_TYPE.name(),
-                "Content-Type must be application/json"
+                "Request Content-Type is not supported by this endpoint"
         );
         return ResponseEntity
                 .status(ErrorCode.UNSUPPORTED_MEDIA_TYPE.getStatus())
@@ -80,27 +84,89 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(
-            MaxUploadSizeExceededException exception
+            MaxUploadSizeExceededException exception,
+            HttpServletRequest request
     ) {
+        boolean licenseDocument = isLicenseDocumentRequest(request);
+        boolean merchantImage = isMerchantImageRequest(request);
+        ErrorCode errorCode = licenseDocument
+                ? ErrorCode.LICENSE_DOCUMENT_TOO_LARGE
+                : merchantImage
+                        ? ErrorCode.MERCHANT_IMAGE_TOO_LARGE
+                        : ErrorCode.AVATAR_TOO_LARGE;
         ApiError error = ApiError.of(
-                ErrorCode.AVATAR_TOO_LARGE.name(),
-                "Avatar file must not exceed 5 MB"
+                errorCode.name(),
+                licenseDocument
+                        ? "Business license image must not exceed 5 MB"
+                        : merchantImage
+                                ? "Merchant image file must not exceed 5 MB"
+                                : "Avatar file must not exceed 5 MB"
         );
         return ResponseEntity
-                .status(ErrorCode.AVATAR_TOO_LARGE.getStatus())
+                .status(errorCode.getStatus())
                 .body(ApiResponse.error(error));
     }
 
     @ExceptionHandler(MissingServletRequestPartException.class)
     public ResponseEntity<ApiResponse<Void>> handleMissingRequestPart(
-            MissingServletRequestPartException exception
+            MissingServletRequestPartException exception,
+            HttpServletRequest request
     ) {
+        boolean licenseDocument = isLicenseDocumentRequest(request);
+        boolean merchantImage = isMerchantImageRequest(request);
+        ErrorCode errorCode = licenseDocument
+                ? ErrorCode.INVALID_LICENSE_DOCUMENT
+                : merchantImage
+                        ? ErrorCode.INVALID_MERCHANT_IMAGE
+                        : ErrorCode.INVALID_AVATAR;
         ApiError error = ApiError.of(
-                ErrorCode.INVALID_AVATAR.name(),
-                "Avatar file is required"
+                errorCode.name(),
+                licenseDocument
+                        ? "Business license number and image are required"
+                        : merchantImage
+                                ? "Merchant image file is required"
+                                : "Avatar file is required"
         );
         return ResponseEntity
-                .status(ErrorCode.INVALID_AVATAR.getStatus())
+                .status(errorCode.getStatus())
+                .body(ApiResponse.error(error));
+    }
+
+    private boolean isMerchantImageRequest(HttpServletRequest request) {
+        return request.getServletPath().startsWith("/api/v1/merchants/");
+    }
+
+    private boolean isLicenseDocumentRequest(HttpServletRequest request) {
+        return request.getServletPath().startsWith("/api/v1/merchant-applications");
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(
+            ConstraintViolationException exception
+    ) {
+        ApiError error = ApiError.of(
+                ErrorCode.VALIDATION_FAILED.name(),
+                "Request validation failed"
+        );
+        return ResponseEntity
+                .status(ErrorCode.VALIDATION_FAILED.getStatus())
+                .body(ApiResponse.error(error));
+    }
+
+    @ExceptionHandler({
+            HandlerMethodValidationException.class,
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleRequestParameterValidation(
+            Exception exception
+    ) {
+        ApiError error = ApiError.of(
+                ErrorCode.VALIDATION_FAILED.name(),
+                "Request parameter validation failed"
+        );
+        return ResponseEntity
+                .status(ErrorCode.VALIDATION_FAILED.getStatus())
                 .body(ApiResponse.error(error));
     }
 

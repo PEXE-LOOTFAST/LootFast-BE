@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Set;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -36,7 +38,8 @@ class SigninControllerTests {
     void signinReturnsAccessToken() throws Exception {
         SigninResponse response = new SigninResponse(
                 "access-token", "refresh-token", "Bearer", 900, 2_592_000,
-                "Kien", "Nguyen Van", "kien@gmail.com", UserRole.BUYER
+                "Kien", "Nguyen Van", "kien@gmail.com", UserRole.BUYER,
+                Set.of(UserRole.BUYER)
         );
         when(signinService.signin(any())).thenReturn(response);
 
@@ -51,7 +54,8 @@ class SigninControllerTests {
                 .andExpect(jsonPath("$.data.expiresIn").value(900))
                 .andExpect(jsonPath("$.data.refreshExpiresIn").value(2_592_000))
                 .andExpect(jsonPath("$.data.email").value("kien@gmail.com"))
-                .andExpect(jsonPath("$.data.role").value("BUYER"));
+                .andExpect(jsonPath("$.data.role").value("BUYER"))
+                .andExpect(jsonPath("$.data.roles[0]").value("BUYER"));
     }
 
     @Test

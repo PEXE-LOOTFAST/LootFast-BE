@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,6 +57,7 @@ class CurrentUserServiceTests {
         when(user.getEmail()).thenReturn("kien@gmail.com");
         when(user.getPhoneNumber()).thenReturn("912345678");
         when(user.getRole()).thenReturn(UserRole.BUYER);
+        when(user.getRoles()).thenReturn(Set.of(UserRole.BUYER));
         when(user.getCreatedAt()).thenReturn(createdAt);
         when(userProfileRepository.findByUserId(42L)).thenReturn(Optional.of(profile));
         when(profile.getDisplayName()).thenReturn("Kien foodie");
