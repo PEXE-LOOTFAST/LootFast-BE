@@ -1,0 +1,143 @@
+package com.lootfast.backend.user.controller;
+
+import com.lootfast.backend.common.response.ApiResponse;
+import com.lootfast.backend.user.dto.AvatarResponse;
+import com.lootfast.backend.user.dto.CurrentUserResponse;
+import com.lootfast.backend.user.service.CurrentUserService;
+import com.lootfast.backend.user.service.UserAvatarService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+@Tag(name = "User", description = "Thông tin tài khoản người dùng hiện tại")
+@RestController
+@RequestMapping("/api/v1/users")
+public class CurrentUserController {
+
+    private final CurrentUserService currentUserService;
+    private final UserAvatarService userAvatarService;
+
+    public CurrentUserController(
+            CurrentUserService currentUserService,
+            UserAvatarService userAvatarService
+    ) {
+        this.currentUserService = currentUserService;
+        this.userAvatarService = userAvatarService;
+    }
+
+    @Operation(summary = "Lấy thông tin tài khoản hiện tại",
+            description = "Trả về profile của user đang đăng nhập dựa trên JWT. Yêu cầu Bearer token hợp lệ.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Thành công",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = @ExampleObject(value = """
+                                    {
+                                      "success": true,
+                                      "data": {
+                                        "publicId": "550e8400-e29b-41d4-a716-446655440000",
+                                        "firstName": "Kien",
+                                        "lastName": "Nguyen Van",
+                                        "email": "kien@gmail.com",
+                                        "phoneNumber": "912345678",
+                                        "role": "BUYER",
+                                        "roles": ["BUYER"],
+                                        "displayName": "Kien Nguyen Van",
+                                        "avatarUrl": null,
+                                        "pickupArea": null,
+                                        "favoriteCategories": [],
+                                        "createdAt": "2026-09-09T08:00:00Z"
+                                      },
+                                      "traceId": "abc-123",
+                                      "timestamp": "2026-09-09T08:00:00Z"
+                                    }
+                                    """))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "Không có token hoặc token không hợp lệ / user đã bị xoá",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            examples = {
+                                    @ExampleObject(name = "UNAUTHORIZED", summary = "Không có token",
+                                            value = """
+                                                    {
+                                                      "success": false,
+                                                      "error": {
+                                                        "code": "UNAUTHORIZED",
+                                                        "message": "Authentication is required"
+                                                      },
+                                                      "traceId": "abc-123",
+                                                      "timestamp": "2026-09-09T08:00:00Z"
+                                                    }
+                                                    """),
+                                    @ExampleObject(name = "USER_NOT_FOUND", summary = "User đã bị xoá khỏi DB",
+                                            value = """
+                                                    {
+                                                      "success": false,
+                                                      "error": {
+                                                        "code": "USER_NOT_FOUND",
+                                                        "message": "Authenticated user is no longer available"
+                                                      },
+                                                      "traceId": "abc-123",
+                                                      "timestamp": "2026-09-09T08:00:00Z"
+                                                    }
+                                                    """)}))
+    })
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<CurrentUserResponse>> getCurrentUser(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                currentUserService.getCurrentUser(jwt.getSubject())));
+    }
+
+    @Operation(
+            summary = "Cập nhật ảnh đại diện",
+            description = "Upload ảnh JPEG hoặc PNG, tối đa 5 MB, cho user đang đăng nhập.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Upload thành công"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "File không phải JPEG/PNG hợp lệ"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "413",
+                    description = "File vượt quá 5 MB"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "502",
+                    description = "Dịch vụ lưu ảnh tạm thời không khả dụng"
+            )
+    })
+    @PutMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<AvatarResponse>> uploadAvatar(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestPart("file") MultipartFile file
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                userAvatarService.uploadAvatar(jwt.getSubject(), file)
+        ));
+    }
+}
