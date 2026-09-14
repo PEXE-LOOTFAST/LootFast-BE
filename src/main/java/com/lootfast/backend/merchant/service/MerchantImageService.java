@@ -29,17 +29,20 @@ public class MerchantImageService {
     private final MerchantProfileRepository merchantProfileRepository;
     private final ImageStorage imageStorage;
     private final ImageFileValidator imageFileValidator;
+    private final MerchantImageUploadRateLimiter uploadRateLimiter;
 
     public MerchantImageService(
             UserRepository userRepository,
             MerchantProfileRepository merchantProfileRepository,
             ImageStorage imageStorage,
-            ImageFileValidator imageFileValidator
+            ImageFileValidator imageFileValidator,
+            MerchantImageUploadRateLimiter uploadRateLimiter
     ) {
         this.userRepository = userRepository;
         this.merchantProfileRepository = merchantProfileRepository;
         this.imageStorage = imageStorage;
         this.imageFileValidator = imageFileValidator;
+        this.uploadRateLimiter = uploadRateLimiter;
     }
 
     public MerchantImageResponse uploadLogo(String subject, MultipartFile file) {
@@ -55,8 +58,9 @@ public class MerchantImageService {
             MultipartFile file,
             MerchantImageType imageType
     ) {
-        byte[] content = validateAndRead(file, imageType);
         Long userId = parseUserId(subject);
+        uploadRateLimiter.requireAllowed(userId);
+        byte[] content = validateAndRead(file, imageType);
         User user = userRepository.findByIdWithRoles(userId)
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.USER_NOT_FOUND,

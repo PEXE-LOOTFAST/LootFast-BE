@@ -6,6 +6,7 @@ import com.lootfast.backend.common.storage.ImageStorage;
 import com.lootfast.backend.common.storage.StoredImage;
 import com.lootfast.backend.merchant.entity.MerchantProfile;
 import com.lootfast.backend.merchant.repository.MerchantProfileRepository;
+import com.lootfast.backend.merchant.service.MerchantImageUploadRateLimiter;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserRole;
 import com.lootfast.backend.user.entity.UserStatus;
@@ -65,6 +66,9 @@ class AuthorizationIntegrationTests {
 
     @MockitoBean
     private ImageStorage imageStorage;
+
+    @MockitoBean
+    private MerchantImageUploadRateLimiter merchantImageUploadRateLimiter;
 
     @BeforeEach
     void setUp() {

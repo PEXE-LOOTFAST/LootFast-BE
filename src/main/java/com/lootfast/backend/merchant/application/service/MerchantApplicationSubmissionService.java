@@ -49,29 +49,35 @@ public class MerchantApplicationSubmissionService {
         byte[] content = validateAndRead(file);
         MerchantApplicationTransactionService.UploadAttempt attempt =
                 transactionService.beginSubmission(subject, normalizedLicenseNumber);
+        deletePreviousLicenseOrFail(subject, attempt);
         String storageKey = "lootfast/merchant-applications/"
                 + attempt.userPublicId()
                 + "/"
                 + attempt.submissionId()
                 + "/business-license";
 
+        StoredPrivateImage storedImage;
         try {
-            StoredPrivateImage storedImage = privateImageStorage.uploadPrivate(
-                    storageKey,
-                    content
-            );
-            return transactionService.finishSubmission(
-                    subject,
-                    attempt.submissionId(),
-                    storedImage.storageKey(),
-                    storedImage.format()
-            );
+            storedImage = privateImageStorage.uploadPrivate(storageKey, content);
         } catch (ImageStorageException exception) {
             markUploadFailedWithoutMaskingOriginalError(subject, attempt.submissionId());
             throw new ApiException(
                     ErrorCode.LICENSE_UPLOAD_FAILED,
                     "Business license could not be uploaded at this time"
             );
+        }
+
+        try {
+            return transactionService.finishSubmission(
+                    subject,
+                    attempt.submissionId(),
+                    storedImage.storageKey(),
+                    storedImage.format()
+            );
+        } catch (RuntimeException exception) {
+            deleteWithoutMaskingOriginalError(storedImage.storageKey());
+            markUploadFailedWithoutMaskingOriginalError(subject, attempt.submissionId());
+            throw exception;
         }
     }
 
@@ -121,6 +127,34 @@ public class MerchantApplicationSubmissionService {
             case INVALID_IMAGE -> "Business license file is not a valid image";
             case FILE_TOO_LARGE -> "Business license image must not exceed 5 MB";
         };
+    }
+
+    private void deletePreviousLicenseOrFail(
+            String subject,
+            MerchantApplicationTransactionService.UploadAttempt attempt
+    ) {
+        if (attempt.previousStorageKey() == null
+                || attempt.previousStorageKey().isBlank()) {
+            return;
+        }
+
+        try {
+            privateImageStorage.deletePrivate(attempt.previousStorageKey());
+        } catch (ImageStorageException exception) {
+            markUploadFailedWithoutMaskingOriginalError(subject, attempt.submissionId());
+            throw new ApiException(
+                    ErrorCode.LICENSE_UPLOAD_FAILED,
+                    "Previous business license could not be replaced at this time"
+            );
+        }
+    }
+
+    private void deleteWithoutMaskingOriginalError(String storageKey) {
+        try {
+            privateImageStorage.deletePrivate(storageKey);
+        } catch (RuntimeException cleanupException) {
+            log.error("Could not clean up unreferenced private merchant license", cleanupException);
+        }
     }
 
     private void markUploadFailedWithoutMaskingOriginalError(

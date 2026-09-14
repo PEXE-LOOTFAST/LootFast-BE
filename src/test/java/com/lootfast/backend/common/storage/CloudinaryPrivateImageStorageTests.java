@@ -69,6 +69,23 @@ class CloudinaryPrivateImageStorageTests {
         assertTrue((Long) options.getValue().get("expires_at") > before);
     }
 
+    @Test
+    void deleteUsesAuthenticatedDeliveryType() throws IOException {
+        CloudinaryPrivateImageStorage storage = configuredStorage();
+        String storageKey = "lootfast/merchant-applications/user/submission/license";
+        when(cloudinary.uploader()).thenReturn(uploader);
+        when(uploader.destroy(eq(storageKey), any())).thenReturn(Map.of("result", "ok"));
+
+        storage.deletePrivate(storageKey);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> options = ArgumentCaptor.forClass(Map.class);
+        verify(uploader).destroy(eq(storageKey), options.capture());
+        assertEquals("authenticated", options.getValue().get("type"));
+        assertEquals("image", options.getValue().get("resource_type"));
+        assertEquals(true, options.getValue().get("invalidate"));
+    }
+
     private CloudinaryPrivateImageStorage configuredStorage() {
         return new CloudinaryPrivateImageStorage(
                 cloudinary,

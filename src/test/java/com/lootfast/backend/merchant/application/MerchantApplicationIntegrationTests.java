@@ -10,6 +10,7 @@ import com.lootfast.backend.common.storage.StoredPrivateImage;
 import com.lootfast.backend.merchant.application.repository.MerchantApplicationRepository;
 import com.lootfast.backend.merchant.application.service.MerchantApplicationSubmissionService;
 import com.lootfast.backend.merchant.repository.MerchantProfileRepository;
+import com.lootfast.backend.merchant.service.MerchantImageUploadRateLimiter;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserRole;
 import com.lootfast.backend.user.entity.UserStatus;
@@ -43,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -62,6 +64,7 @@ class MerchantApplicationIntegrationTests {
 
     @MockitoBean private PrivateImageStorage privateImageStorage;
     @MockitoBean private ImageStorage imageStorage;
+    @MockitoBean private MerchantImageUploadRateLimiter merchantImageUploadRateLimiter;
 
     private User buyer;
     private User admin;
@@ -169,6 +172,7 @@ class MerchantApplicationIntegrationTests {
                         .value("License image is unreadable"));
 
         submit(buyerToken);
+        verify(privateImageStorage).deletePrivate("private-license-key");
         mockMvc.perform(get("/api/v1/merchant-applications/me")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + buyerToken))
                 .andExpect(status().isOk())

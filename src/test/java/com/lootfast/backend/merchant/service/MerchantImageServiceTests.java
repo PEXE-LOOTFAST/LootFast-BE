@@ -34,6 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -48,6 +51,7 @@ class MerchantImageServiceTests {
     @Mock private UserRepository userRepository;
     @Mock private MerchantProfileRepository merchantProfileRepository;
     @Mock private ImageStorage imageStorage;
+    @Mock private MerchantImageUploadRateLimiter uploadRateLimiter;
 
     private MerchantImageService merchantImageService;
 
@@ -57,7 +61,8 @@ class MerchantImageServiceTests {
                 userRepository,
                 merchantProfileRepository,
                 imageStorage,
-                new ImageFileValidator()
+                new ImageFileValidator(),
+                uploadRateLimiter
         );
     }
 
@@ -194,6 +199,34 @@ class MerchantImageServiceTests {
         assertEquals(ErrorCode.MERCHANT_IMAGE_UPLOAD_FAILED, exception.getErrorCode());
         verify(merchantProfileRepository, never())
                 .updateCoverByUserId(any(), any(), any(), any());
+    }
+
+    @Test
+    void rateLimitStopsRepeatedRequestBeforeCloudinaryCall() throws IOException {
+        byte[] image = pngImage();
+        User user = merchantUser();
+        when(userRepository.findByIdWithRoles(42L)).thenReturn(Optional.of(user));
+        when(merchantProfileRepository.existsByUserId(42L)).thenReturn(true);
+        when(imageStorage.upload(any(), any(), any())).thenReturn(
+                new StoredImage("merchant-logo-key", "https://example.test/logo.png")
+        );
+        when(merchantProfileRepository.updateLogoByUserId(
+                eq(42L), any(), any(), any()
+        )).thenReturn(1);
+        doNothing().doThrow(new ApiException(
+                ErrorCode.MERCHANT_IMAGE_RATE_LIMITED,
+                "rate limited"
+        )).when(uploadRateLimiter).requireAllowed(42L);
+
+        merchantImageService.uploadLogo("42", imageFile("logo.png", image));
+        ApiException exception = assertThrows(
+                ApiException.class,
+                () -> merchantImageService.uploadLogo("42", imageFile("logo.png", image))
+        );
+
+        assertEquals(ErrorCode.MERCHANT_IMAGE_RATE_LIMITED, exception.getErrorCode());
+        verify(imageStorage, times(1)).upload(any(), any(), any());
+        verify(userRepository, times(1)).findByIdWithRoles(42L);
     }
 
     private User merchantUser() {

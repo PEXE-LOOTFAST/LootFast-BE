@@ -12,4 +12,7 @@ FROM users;
 
 CREATE INDEX idx_user_roles_role ON user_roles (role);
 
-ALTER TABLE users DROP COLUMN role;
+-- Expand only: old application instances still require this column during a
+-- rolling deployment. A later release can remove it after the compatibility
+-- window has closed.
+ALTER TABLE users ALTER COLUMN role SET DEFAULT 'BUYER';

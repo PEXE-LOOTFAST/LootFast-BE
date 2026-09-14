@@ -55,3 +55,7 @@ The admin must sign in again or refresh their token before calling admin APIs.
 
 License images use Cloudinary's authenticated delivery type. Unlike avatars and
 merchant logos, they are not exposed through a permanent public URL.
+
+Merchant logo and cover uploads share a durable Redis-backed limit of 10 uploads
+per account per hour. Requests over the limit return HTTP 429 before Cloudinary is
+called.

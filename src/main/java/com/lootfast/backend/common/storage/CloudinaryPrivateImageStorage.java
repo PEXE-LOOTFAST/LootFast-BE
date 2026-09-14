@@ -57,6 +57,26 @@ public class CloudinaryPrivateImageStorage implements PrivateImageStorage {
     }
 
     @Override
+    public void deletePrivate(String storageKey) {
+        requireConfiguration();
+
+        try {
+            cloudinary.uploader().destroy(storageKey, ObjectUtils.asMap(
+                    "resource_type", "image",
+                    "type", "authenticated",
+                    "invalidate", true
+            ));
+        } catch (IOException | RuntimeException exception) {
+            log.error("Cloudinary private image deletion failed for key {}", storageKey,
+                    exception);
+            throw new ImageStorageException(
+                    "Private image storage provider rejected the deletion",
+                    exception
+            );
+        }
+    }
+
+    @Override
     public String createDownloadUrl(
             String storageKey,
             String format,

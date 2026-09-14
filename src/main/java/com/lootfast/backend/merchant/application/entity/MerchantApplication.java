@@ -101,8 +101,6 @@ public class MerchantApplication {
         businessLicenseNumber = licenseNumber;
         submissionId = newSubmissionId;
         status = MerchantApplicationStatus.UPLOADING;
-        licenseStorageKey = null;
-        licenseFormat = null;
         submittedAt = null;
         reviewedAt = null;
         reviewedBy = null;

@@ -6,6 +6,8 @@ public interface PrivateImageStorage {
 
     StoredPrivateImage uploadPrivate(String storageKey, byte[] content);
 
+    void deletePrivate(String storageKey);
+
     String createDownloadUrl(
             String storageKey,
             String format,

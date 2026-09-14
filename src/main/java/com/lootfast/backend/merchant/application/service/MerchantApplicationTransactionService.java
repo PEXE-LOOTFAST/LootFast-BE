@@ -53,6 +53,7 @@ public class MerchantApplicationTransactionService {
         MerchantApplication application = applicationRepository
                 .findByUserIdForUpdate(userId)
                 .orElse(null);
+        String previousStorageKey = null;
 
         if (application == null) {
             application = applicationRepository.save(
@@ -60,10 +61,11 @@ public class MerchantApplicationTransactionService {
             );
         } else {
             ensureCanStartUpload(application);
+            previousStorageKey = application.getLicenseStorageKey();
             application.startUpload(licenseNumber, submissionId);
         }
 
-        return new UploadAttempt(user.getPublicId(), submissionId);
+        return new UploadAttempt(user.getPublicId(), submissionId, previousStorageKey);
     }
 
     @Transactional
@@ -156,6 +158,10 @@ public class MerchantApplicationTransactionService {
         }
     }
 
-    public record UploadAttempt(UUID userPublicId, UUID submissionId) {
+    public record UploadAttempt(
+            UUID userPublicId,
+            UUID submissionId,
+            String previousStorageKey
+    ) {
     }
 }

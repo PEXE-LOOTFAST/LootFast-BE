@@ -48,7 +48,11 @@ public class MerchantImageController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "413", description = "File vượt quá 5 MB"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "502", description = "Dịch vụ lưu ảnh không khả dụng")
+                    responseCode = "429", description = "Vượt quá 10 lần upload mỗi giờ"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "502", description = "Dịch vụ lưu ảnh không khả dụng"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "503", description = "Dịch vụ giới hạn upload không khả dụng")
     })
     @PutMapping(value = "/me/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('MERCHANT')")
@@ -80,7 +84,11 @@ public class MerchantImageController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "413", description = "File vượt quá 5 MB"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "502", description = "Dịch vụ lưu ảnh không khả dụng")
+                    responseCode = "429", description = "Vượt quá 10 lần upload mỗi giờ"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "502", description = "Dịch vụ lưu ảnh không khả dụng"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "503", description = "Dịch vụ giới hạn upload không khả dụng")
     })
     @PutMapping(value = "/me/cover", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('MERCHANT')")
