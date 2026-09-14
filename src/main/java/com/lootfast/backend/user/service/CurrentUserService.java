@@ -41,6 +41,7 @@ public class CurrentUserService {
                 user.getEmail(),
                 user.getPhoneNumber(),
                 user.getRole(),
+                user.getRoles(),
                 profile == null ? defaultDisplayName(user) : profile.getDisplayName(),
                 profile == null ? null : profile.getAvatarUrl(),
                 profile == null ? null : profile.getPickupArea(),

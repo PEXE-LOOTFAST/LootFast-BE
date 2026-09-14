@@ -2,24 +2,28 @@ package com.lootfast.backend.security;
 
 import com.jayway.jsonpath.JsonPath;
 import com.lootfast.backend.auth.service.OtpService;
-import com.lootfast.backend.common.storage.AvatarStorage;
-import com.lootfast.backend.common.storage.StoredAvatar;
+import com.lootfast.backend.common.storage.ImageStorage;
+import com.lootfast.backend.common.storage.StoredImage;
+import com.lootfast.backend.merchant.entity.MerchantProfile;
+import com.lootfast.backend.merchant.repository.MerchantProfileRepository;
+import com.lootfast.backend.merchant.service.MerchantImageUploadRateLimiter;
+import com.lootfast.backend.user.entity.User;
+import com.lootfast.backend.user.entity.UserRole;
+import com.lootfast.backend.user.entity.UserStatus;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -28,6 +32,7 @@ import java.io.IOException;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -40,7 +45,6 @@ import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(AuthorizationIntegrationTests.MerchantOnlyTestController.class)
 class AuthorizationIntegrationTests {
 
     @Autowired
@@ -49,13 +53,22 @@ class AuthorizationIntegrationTests {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private MerchantProfileRepository merchantProfileRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     // Mock OtpService để signup không gọi Redis thật trong integration test.
     // Test này chỉ kiểm tra authorization flow, không test OTP.
     @MockitoBean
     private OtpService otpService;
 
     @MockitoBean
-    private AvatarStorage avatarStorage;
+    private ImageStorage imageStorage;
+
+    @MockitoBean
+    private MerchantImageUploadRateLimiter merchantImageUploadRateLimiter;
 
     @BeforeEach
     void setUp() {
@@ -75,6 +88,7 @@ class AuthorizationIntegrationTests {
                 .andExpect(jsonPath("$.data.email").value("kien@gmail.com"))
                 .andExpect(jsonPath("$.data.phoneNumber").value("912345678"))
                 .andExpect(jsonPath("$.data.role").value("BUYER"))
+                .andExpect(jsonPath("$.data.roles[0]").value("BUYER"))
                 .andExpect(jsonPath("$.data.displayName").value("Kien Nguyen Van"))
                 .andExpect(jsonPath("$.data.avatarUrl").isEmpty())
                 .andExpect(jsonPath("$.data.pickupArea").isEmpty())
@@ -95,6 +109,40 @@ class AuthorizationIntegrationTests {
                 .andReturn();
 
         assertResponseTraceMatchesHeader(result);
+    }
+
+    @Test
+    void corsPreflightAllowsConfiguredFrontendOrigin() throws Exception {
+        mockMvc.perform(options("/api/v1/users/me")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:5173")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.GET.name())
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS,
+                                HttpHeaders.AUTHORIZATION))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "http://localhost:5173"
+                ))
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
+                        org.hamcrest.Matchers.containsString(HttpMethod.GET.name())
+                ));
+    }
+
+    @Test
+    void corsPreflightRejectsUnconfiguredOrigin() throws Exception {
+        mockMvc.perform(options("/api/v1/users/me")
+                        .header(HttpHeaders.ORIGIN, "https://untrusted.example")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.GET.name()))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @Test
+    void healthEndpointIsPublic() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
     }
 
     @Test
@@ -129,7 +177,7 @@ class AuthorizationIntegrationTests {
                 MediaType.IMAGE_PNG_VALUE,
                 pngImage()
         );
-        when(avatarStorage.upload(any(), any())).thenReturn(new StoredAvatar(
+        when(imageStorage.upload(any(), any(), any())).thenReturn(new StoredImage(
                 "lootfast/user-avatars/test-user",
                 avatarUrl
         ));
@@ -170,8 +218,19 @@ class AuthorizationIntegrationTests {
     @Test
     void buyerReceivesForbiddenFromMerchantOnlyEndpoint() throws Exception {
         String token = signupAndSignin();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "logo.png",
+                MediaType.IMAGE_PNG_VALUE,
+                pngImage()
+        );
 
-        MvcResult result = mockMvc.perform(get("/test/merchant-only")
+        MvcResult result = mockMvc.perform(multipart("/api/v1/merchants/me/logo")
+                        .file(file)
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        })
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false))
@@ -181,6 +240,51 @@ class AuthorizationIntegrationTests {
                 .andReturn();
 
         assertResponseTraceMatchesHeader(result);
+    }
+
+    @Test
+    void merchantCanUploadLogoToOwnProfile() throws Exception {
+        User merchant = userRepository.save(new User(
+                "Kien",
+                "Nguyen Van",
+                "kien@gmail.com",
+                "912345678",
+                passwordEncoder.encode("password123"),
+                UserRole.MERCHANT,
+                UserStatus.VERIFIED
+        ));
+        merchantProfileRepository.save(new MerchantProfile(merchant));
+        String token = signin();
+        String logoUrl = "https://res.cloudinary.com/demo/merchant-logo.png";
+        when(imageStorage.upload(any(), any(), any())).thenReturn(new StoredImage(
+                "lootfast/merchant-profiles/test-user/logo",
+                logoUrl
+        ));
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "logo.png",
+                MediaType.IMAGE_PNG_VALUE,
+                pngImage()
+        );
+
+        mockMvc.perform(multipart("/api/v1/merchants/me/logo")
+                        .file(file)
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        })
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.imageType").value("LOGO"))
+                .andExpect(jsonPath("$.data.url").value(logoUrl));
+
+        assertEquals(
+                logoUrl,
+                merchantProfileRepository.findByUserId(merchant.getId())
+                        .orElseThrow()
+                        .getLogoUrl()
+        );
     }
 
     private String signupAndSignin() throws Exception {
@@ -196,6 +300,10 @@ class AuthorizationIntegrationTests {
             userRepository.save(user);
         });
 
+        return signin();
+    }
+
+    private String signin() throws Exception {
         String body = mockMvc.perform(post("/api/v1/auth/signin")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(signinRequest()))
@@ -236,14 +344,5 @@ class AuthorizationIntegrationTests {
         String bodyTraceId = JsonPath.read(result.getResponse().getContentAsString(), "$.traceId");
         assertNotEquals("no-trace", bodyTraceId);
         assertEquals(headerTraceId, bodyTraceId);
-    }
-
-    @RestController
-    static class MerchantOnlyTestController {
-        @GetMapping("/test/merchant-only")
-        @PreAuthorize("hasRole('MERCHANT')")
-        String merchantOnly() {
-            return "ok";
-        }
     }
 }

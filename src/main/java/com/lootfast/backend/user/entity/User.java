@@ -1,17 +1,24 @@
 package com.lootfast.backend.user.entity;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.Instant;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -46,9 +53,15 @@ public class User {
     @Column(name = "phone_number", nullable = false, length = 9)
     private String phoneNumber;
 
+    @ElementCollection(fetch = FetchType.LAZY)
+    @BatchSize(size = 50)
+    @CollectionTable(
+            name = "user_roles",
+            joinColumns = @JoinColumn(name = "user_id")
+    )
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private UserRole role;
+    @Column(name = "role", nullable = false, length = 32)
+    private Set<UserRole> roles = EnumSet.noneOf(UserRole.class);
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -74,7 +87,7 @@ public class User {
         this.email = email;
         this.phoneNumber = phoneNumber;
         this.passwordHash = passwordHash;
-        this.role = role;
+        this.roles.add(role);
         this.status = status;
     }
 
@@ -113,7 +126,25 @@ public class User {
     }
 
     public UserRole getRole() {
-        return role;
+        if (roles.contains(UserRole.ADMIN)) {
+            return UserRole.ADMIN;
+        }
+        if (roles.contains(UserRole.MERCHANT)) {
+            return UserRole.MERCHANT;
+        }
+        return UserRole.BUYER;
+    }
+
+    public Set<UserRole> getRoles() {
+        return Set.copyOf(roles);
+    }
+
+    public boolean hasRole(UserRole role) {
+        return roles.contains(role);
+    }
+
+    public void addRole(UserRole role) {
+        roles.add(role);
     }
 
     public UserStatus getStatus() {

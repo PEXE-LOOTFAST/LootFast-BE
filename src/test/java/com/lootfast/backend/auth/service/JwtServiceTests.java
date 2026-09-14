@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -51,6 +52,7 @@ class JwtServiceTests {
         when(user.getId()).thenReturn(42L);
         when(user.getEmail()).thenReturn("kien@gmail.com");
         when(user.getRole()).thenReturn(UserRole.BUYER);
+        when(user.getRoles()).thenReturn(Set.of(UserRole.BUYER));
 
         JwtService.IssuedToken issuedToken = jwtService.issueAccessToken(user);
         Jwt jwt = decoder.decode(issuedToken.value());
@@ -60,6 +62,7 @@ class JwtServiceTests {
         assertEquals("42", jwt.getSubject());
         assertEquals("kien@gmail.com", jwt.getClaimAsString("email"));
         assertEquals("BUYER", jwt.getClaimAsString("role"));
+        assertEquals(java.util.List.of("BUYER"), jwt.getClaimAsStringList("roles"));
         assertEquals(issuedAt, jwt.getIssuedAt());
         assertEquals(issuedAt.plusSeconds(900), jwt.getExpiresAt());
     }

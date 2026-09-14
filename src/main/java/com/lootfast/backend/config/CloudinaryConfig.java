@@ -10,13 +10,16 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties(CloudinaryProperties.class)
 public class CloudinaryConfig {
 
+    private static final int REQUEST_TIMEOUT_SECONDS = 20;
+
     @Bean
     Cloudinary cloudinary(CloudinaryProperties properties) {
         return new Cloudinary(ObjectUtils.asMap(
                 "cloud_name", properties.cloudName(),
                 "api_key", properties.apiKey(),
                 "api_secret", properties.apiSecret(),
-                "secure", true
+                "secure", true,
+                "timeout", REQUEST_TIMEOUT_SECONDS
         ));
     }
 }

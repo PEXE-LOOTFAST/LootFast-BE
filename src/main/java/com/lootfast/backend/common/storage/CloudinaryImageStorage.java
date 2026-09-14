@@ -9,17 +9,16 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.UUID;
 
 @Component
-public class CloudinaryAvatarStorage implements AvatarStorage {
+public class CloudinaryImageStorage implements ImageStorage {
 
-    private static final Logger log = LoggerFactory.getLogger(CloudinaryAvatarStorage.class);
+    private static final Logger log = LoggerFactory.getLogger(CloudinaryImageStorage.class);
 
     private final Cloudinary cloudinary;
     private final CloudinaryProperties properties;
 
-    public CloudinaryAvatarStorage(
+    public CloudinaryImageStorage(
             Cloudinary cloudinary,
             CloudinaryProperties properties
     ) {
@@ -28,36 +27,38 @@ public class CloudinaryAvatarStorage implements AvatarStorage {
     }
 
     @Override
-    public StoredAvatar upload(UUID userPublicId, byte[] content) {
+    public StoredImage upload(
+            String storageKey,
+            byte[] content,
+            ImageUploadPreset preset
+    ) {
         if (!properties.isConfigured()) {
-            throw new AvatarStorageException("Cloudinary avatar storage is not configured");
+            throw new ImageStorageException("Cloudinary image storage is not configured");
         }
-
-        String storageKey = "lootfast/user-avatars/" + userPublicId;
 
         try {
             Map<?, ?> result = cloudinary.uploader().upload(content, ObjectUtils.asMap(
                     "public_id", storageKey,
                     "resource_type", "image",
-                    "transformation", "c_limit,h_1024,w_1024,q_auto",
+                    "transformation", preset.transformation(),
                     "overwrite", true,
                     "invalidate", true
             ));
 
             String uploadedKey = requiredValue(result, "public_id");
             String secureUrl = requiredValue(result, "secure_url");
-            return new StoredAvatar(uploadedKey, secureUrl);
+            return new StoredImage(uploadedKey, secureUrl);
         } catch (IOException | RuntimeException exception) {
-            log.error("Cloudinary avatar upload failed for user {}", userPublicId, exception);
-            throw new AvatarStorageException("Avatar storage provider rejected the upload", exception);
+            log.error("Cloudinary image upload failed for key {}", storageKey, exception);
+            throw new ImageStorageException("Image storage provider rejected the upload", exception);
         }
     }
 
     private String requiredValue(Map<?, ?> result, String key) {
         Object value = result.get(key);
         if (value == null || value.toString().isBlank()) {
-            throw new AvatarStorageException(
-                    "Avatar storage provider returned an incomplete response"
+            throw new ImageStorageException(
+                    "Image storage provider returned an incomplete response"
             );
         }
         return value.toString();
