@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface MerchantProfileRepository extends JpaRepository<MerchantProfile, Long> {
 
@@ -21,6 +22,17 @@ public interface MerchantProfileRepository extends JpaRepository<MerchantProfile
     Optional<MerchantProfile> findByUserIdForUpdate(@Param("userId") Long userId);
 
     boolean existsByUserId(Long userId);
+
+    @Query("""
+            select profile
+            from MerchantProfile profile
+            join fetch profile.user merchantUser
+            where merchantUser.publicId = :publicId
+              and profile.storeName is not null
+              and profile.latitude is not null
+              and profile.longitude is not null
+            """)
+    Optional<MerchantProfile> findPublicByUserPublicId(@Param("publicId") UUID publicId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional

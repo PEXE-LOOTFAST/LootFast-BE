@@ -1,5 +1,6 @@
 package com.lootfast.backend.deal.entity;
 
+import com.lootfast.backend.common.text.SearchNormalizer;
 import com.lootfast.backend.merchant.entity.MerchantProfile;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -50,6 +51,9 @@ public class Deal {
 
     @Column(name = "name", nullable = false, length = 160)
     private String name;
+
+    @Column(name = "search_name", nullable = false, length = 160)
+    private String searchName;
 
     @Column(name = "category_code", nullable = false, length = 100)
     private String categoryCode;
@@ -132,12 +136,14 @@ public class Deal {
     private void beforeInsert() {
         Instant now = Instant.now();
         publicId = UUID.randomUUID();
+        searchName = SearchNormalizer.normalize(name);
         createdAt = now;
         updatedAt = now;
     }
 
     @PreUpdate
     private void beforeUpdate() {
+        searchName = SearchNormalizer.normalize(name);
         updatedAt = Instant.now();
     }
 
@@ -155,6 +161,10 @@ public class Deal {
 
     public String getCategoryCode() {
         return categoryCode;
+    }
+
+    public String getSearchName() {
+        return searchName;
     }
 
     public BigDecimal getOriginalPrice() {
@@ -183,5 +193,25 @@ public class Deal {
 
     public Instant getPickupEnd() {
         return pickupEnd;
+    }
+
+    public Instant getAvailableFrom() {
+        return availableFrom;
+    }
+
+    public Instant getAvailableUntil() {
+        return availableUntil;
+    }
+
+    public DealStatus getStatus() {
+        return status;
+    }
+
+    public long getVersion() {
+        return version;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
     }
 }
