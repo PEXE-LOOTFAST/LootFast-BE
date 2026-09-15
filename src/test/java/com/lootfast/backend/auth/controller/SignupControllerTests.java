@@ -1,10 +1,12 @@
 package com.lootfast.backend.auth.controller;
 
 import com.lootfast.backend.auth.dto.SignupResponse;
+import com.lootfast.backend.auth.dto.OnboardingAction;
 import com.lootfast.backend.auth.service.SignupService;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.common.exception.GlobalExceptionHandler;
+import com.lootfast.backend.user.entity.AccountType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -34,7 +36,12 @@ class SignupControllerTests {
     @Test
     void signupReturnsOtpSentMessage() throws Exception {
         when(signupService.signup(any())).thenReturn(
-                new SignupResponse("Verification code sent to kien@gmail.com", "kien@gmail.com"));
+                new SignupResponse(
+                        "Verification code sent to kien@gmail.com",
+                        "kien@gmail.com",
+                        AccountType.BUYER,
+                        OnboardingAction.BUYER_HOME
+                ));
 
         mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -57,7 +64,12 @@ class SignupControllerTests {
                                   "email": "kien@yahoo.com",
                                   "phoneNumber": "123",
                                   "password": "password123",
-                                  "confirmPassword": "password123"
+                                  "confirmPassword": "password123",
+                                  "accountType": "BUYER",
+                                  "termsAccepted": true,
+                                  "termsVersion": "2026-09",
+                                  "privacyPolicyAccepted": true,
+                                  "privacyPolicyVersion": "2026-09"
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
@@ -101,7 +113,12 @@ class SignupControllerTests {
                   "email": "kien@gmail.com",
                   "phoneNumber": "912345678",
                   "password": "password123",
-                  "confirmPassword": "password123"
+                  "confirmPassword": "password123",
+                  "accountType": "BUYER",
+                  "termsAccepted": true,
+                  "termsVersion": "2026-09",
+                  "privacyPolicyAccepted": true,
+                  "privacyPolicyVersion": "2026-09"
                 }
                 """;
     }

@@ -20,15 +20,18 @@ public class SigninService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthSessionService authSessionService;
+    private final OnboardingService onboardingService;
 
     public SigninService(UserRepository userRepository,
                          PasswordEncoder passwordEncoder,
                          JwtService jwtService,
-                         AuthSessionService authSessionService) {
+                         AuthSessionService authSessionService,
+                         OnboardingService onboardingService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authSessionService = authSessionService;
+        this.onboardingService = onboardingService;
     }
 
     @Transactional
@@ -39,7 +42,8 @@ public class SigninService {
                 .orElseThrow(() -> new ApiException(ErrorCode.INVALID_CREDENTIALS,
                         "Invalid email or password"));
 
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        if (user.getPasswordHash() == null
+                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new ApiException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
         }
 
@@ -61,6 +65,8 @@ public class SigninService {
                 user.getFirstName(),
                 user.getLastName(),
                 user.getEmail(),
+                user.getAccountType(),
+                onboardingService.nextAction(user),
                 user.getRole(),
                 user.getRoles()
         );

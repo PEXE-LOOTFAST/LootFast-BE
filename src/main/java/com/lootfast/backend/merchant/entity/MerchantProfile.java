@@ -152,6 +152,10 @@ public class MerchantProfile {
         return id;
     }
 
+    public User getUser() {
+        return user;
+    }
+
     public String getStoreName() {
         return storeName;
     }

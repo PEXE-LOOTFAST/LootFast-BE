@@ -41,17 +41,21 @@ public class User {
     @Column(nullable = false)
     private String email;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "password_hash")
     private String passwordHash;
 
-    @Column(name = "first_name", nullable = false, length = 10)
+    @Column(name = "first_name", nullable = false, length = 100)
     private String firstName;
 
-    @Column(name = "last_name", nullable = false, length = 20)
+    @Column(name = "last_name", nullable = false, length = 100)
     private String lastName;
 
-    @Column(name = "phone_number", nullable = false, length = 9)
+    @Column(name = "phone_number", length = 9)
     private String phoneNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", nullable = false, length = 32)
+    private AccountType accountType;
 
     @ElementCollection(fetch = FetchType.LAZY)
     @BatchSize(size = 50)
@@ -82,6 +86,20 @@ public class User {
             UserRole role,
             UserStatus status
     ) {
+        this(firstName, lastName, email, phoneNumber, passwordHash, role, status,
+                AccountType.BUYER);
+    }
+
+    public User(
+            String firstName,
+            String lastName,
+            String email,
+            String phoneNumber,
+            String passwordHash,
+            UserRole role,
+            UserStatus status,
+            AccountType accountType
+    ) {
         this.firstName = firstName;
         this.lastName = lastName;
         this.email = email;
@@ -89,6 +107,7 @@ public class User {
         this.passwordHash = passwordHash;
         this.roles.add(role);
         this.status = status;
+        this.accountType = accountType;
     }
 
     @PrePersist
@@ -119,6 +138,10 @@ public class User {
 
     public String getPhoneNumber() {
         return phoneNumber;
+    }
+
+    public AccountType getAccountType() {
+        return accountType;
     }
 
     public String getPasswordHash() {
@@ -153,6 +176,10 @@ public class User {
 
     public void verify() {
         this.status = UserStatus.VERIFIED;
+    }
+
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     public Instant getCreatedAt() {

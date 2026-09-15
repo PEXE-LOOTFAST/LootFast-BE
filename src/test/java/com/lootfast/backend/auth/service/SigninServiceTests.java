@@ -31,6 +31,7 @@ class SigninServiceTests {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtService jwtService;
     @Mock private AuthSessionService authSessionService;
+    @Mock private OnboardingService onboardingService;
 
     private SigninService signinService;
 
@@ -40,7 +41,8 @@ class SigninServiceTests {
                 userRepository,
                 passwordEncoder,
                 jwtService,
-                authSessionService
+                authSessionService,
+                onboardingService
         );
     }
 
@@ -54,6 +56,9 @@ class SigninServiceTests {
                 .thenReturn(new JwtService.IssuedToken("access-token", 900));
         when(authSessionService.createSession(user))
                 .thenReturn(new AuthSessionService.IssuedSession("refresh-token", 2_592_000));
+        when(onboardingService.nextAction(user)).thenReturn(
+                com.lootfast.backend.auth.dto.OnboardingAction.BUYER_HOME
+        );
 
         SigninResponse response = signinService.signin(
                 new SigninRequest(" Kien@Gmail.com ", "password123"));

@@ -25,15 +25,21 @@ public class SignupService {
     private final UserProfileRepository userProfileRepository;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
+    private final ConsentService consentService;
+    private final OnboardingService onboardingService;
 
     public SignupService(UserRepository userRepository,
                          UserProfileRepository userProfileRepository,
                          PasswordEncoder passwordEncoder,
-                         ApplicationEventPublisher eventPublisher) {
+                         ApplicationEventPublisher eventPublisher,
+                         ConsentService consentService,
+                         OnboardingService onboardingService) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.passwordEncoder = passwordEncoder;
         this.eventPublisher = eventPublisher;
+        this.consentService = consentService;
+        this.onboardingService = onboardingService;
     }
 
     @Transactional
@@ -62,7 +68,8 @@ public class SignupService {
                 normalizedPhone,
                 passwordEncoder.encode(request.password()),
                 UserRole.BUYER,
-                UserStatus.UNVERIFIED
+                UserStatus.UNVERIFIED,
+                request.accountType()
         );
 
         User savedUser = userRepository.save(user);
@@ -70,13 +77,20 @@ public class SignupService {
                 savedUser,
                 defaultDisplayName(savedUser)
         ));
+        consentService.recordRequiredConsents(
+                savedUser,
+                request.termsVersion(),
+                request.privacyPolicyVersion()
+        );
 
         // Listener chỉ xử lý sau khi transaction tạo user commit thành công.
         eventPublisher.publishEvent(new SignupCreatedEvent(normalizedEmail));
 
         return new SignupResponse(
                 "Verification code sent to " + normalizedEmail,
-                normalizedEmail
+                normalizedEmail,
+                savedUser.getAccountType(),
+                onboardingService.nextAction(savedUser)
         );
     }
 

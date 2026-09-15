@@ -2,6 +2,7 @@ package com.lootfast.backend.user.service;
 
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
+import com.lootfast.backend.auth.service.OnboardingService;
 import com.lootfast.backend.user.dto.CurrentUserResponse;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserProfile;
@@ -17,13 +18,16 @@ public class CurrentUserService {
 
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
+    private final OnboardingService onboardingService;
 
     public CurrentUserService(
             UserRepository userRepository,
-            UserProfileRepository userProfileRepository
+            UserProfileRepository userProfileRepository,
+            OnboardingService onboardingService
     ) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
+        this.onboardingService = onboardingService;
     }
 
     @Transactional(readOnly = true)
@@ -40,6 +44,8 @@ public class CurrentUserService {
                 user.getLastName(),
                 user.getEmail(),
                 user.getPhoneNumber(),
+                user.getAccountType(),
+                onboardingService.nextAction(user),
                 user.getRole(),
                 user.getRoles(),
                 profile == null ? defaultDisplayName(user) : profile.getDisplayName(),

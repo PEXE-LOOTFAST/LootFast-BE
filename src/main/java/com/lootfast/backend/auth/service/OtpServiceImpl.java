@@ -61,7 +61,7 @@ class OtpServiceImpl implements OtpService {
 
         String otp = generateOtp();
         if (otpStore.saveInitialOtpIfAllowed(normalizedEmail, hmac(otp))) {
-            emailSender.sendOtp(normalizedEmail, otp);
+            emailSender.sendSignupOtp(normalizedEmail, otp);
         }
     }
 
@@ -117,7 +117,7 @@ class OtpServiceImpl implements OtpService {
 
         String otp = generateOtp();
         otpStore.saveOtp(normalizedEmail, hmac(otp));
-        emailSender.sendOtp(normalizedEmail, otp);
+        emailSender.sendSignupOtp(normalizedEmail, otp);
     }
 
     private void deleteOtpAfterCommit(String email) {

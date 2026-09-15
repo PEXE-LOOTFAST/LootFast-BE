@@ -47,6 +47,8 @@ public class SigninController {
                                         "firstName": "Kien",
                                         "lastName": "Nguyen Van",
                                         "email": "kien@gmail.com",
+                                        "accountType": "BUYER",
+                                        "nextAction": "BUYER_HOME",
                                         "role": "BUYER",
                                         "roles": ["BUYER"]
                                       },

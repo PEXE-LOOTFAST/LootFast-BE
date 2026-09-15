@@ -64,7 +64,7 @@ class OtpServiceImplTests {
         otpService.sendSignupOtp(" User@Gmail.com ");
 
         verify(otpStore).saveInitialOtpIfAllowed(eq(EMAIL), anyString());
-        verify(emailSender).sendOtp(eq(EMAIL), anyString());
+        verify(emailSender).sendSignupOtp(eq(EMAIL), anyString());
     }
 
     @Test
@@ -172,7 +172,7 @@ class OtpServiceImplTests {
         otpService.resendOtp(EMAIL);
 
         verify(otpStore).saveOtp(eq(EMAIL), anyString());
-        verify(emailSender).sendOtp(eq(EMAIL), anyString());
+        verify(emailSender).sendSignupOtp(eq(EMAIL), anyString());
     }
 
     private User user(UserStatus status) {

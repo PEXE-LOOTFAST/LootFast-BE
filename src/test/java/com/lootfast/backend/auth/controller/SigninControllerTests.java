@@ -1,11 +1,13 @@
 package com.lootfast.backend.auth.controller;
 
 import com.lootfast.backend.auth.dto.SigninResponse;
+import com.lootfast.backend.auth.dto.OnboardingAction;
 import com.lootfast.backend.auth.service.SigninService;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.common.exception.GlobalExceptionHandler;
 import com.lootfast.backend.user.entity.UserRole;
+import com.lootfast.backend.user.entity.AccountType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -38,7 +40,8 @@ class SigninControllerTests {
     void signinReturnsAccessToken() throws Exception {
         SigninResponse response = new SigninResponse(
                 "access-token", "refresh-token", "Bearer", 900, 2_592_000,
-                "Kien", "Nguyen Van", "kien@gmail.com", UserRole.BUYER,
+                "Kien", "Nguyen Van", "kien@gmail.com", AccountType.BUYER,
+                OnboardingAction.BUYER_HOME, UserRole.BUYER,
                 Set.of(UserRole.BUYER)
         );
         when(signinService.signin(any())).thenReturn(response);
@@ -54,6 +57,8 @@ class SigninControllerTests {
                 .andExpect(jsonPath("$.data.expiresIn").value(900))
                 .andExpect(jsonPath("$.data.refreshExpiresIn").value(2_592_000))
                 .andExpect(jsonPath("$.data.email").value("kien@gmail.com"))
+                .andExpect(jsonPath("$.data.accountType").value("BUYER"))
+                .andExpect(jsonPath("$.data.nextAction").value("BUYER_HOME"))
                 .andExpect(jsonPath("$.data.role").value("BUYER"))
                 .andExpect(jsonPath("$.data.roles[0]").value("BUYER"));
     }
