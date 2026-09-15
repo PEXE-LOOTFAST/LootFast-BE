@@ -2,7 +2,6 @@ package com.lootfast.backend.auth.social;
 
 import com.lootfast.backend.auth.dto.SocialLoginRequest;
 import com.lootfast.backend.auth.service.ConsentService;
-import com.lootfast.backend.user.entity.AccountType;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserProfile;
 import com.lootfast.backend.user.entity.UserRole;
@@ -52,7 +51,7 @@ class SocialLoginTransactionServiceTests {
     }
 
     @Test
-    void firstSocialLoginCreatesVerifiedBuyerRoleWithMerchantOnboardingIntent() {
+    void firstSocialLoginAlwaysCreatesVerifiedBuyerRole() {
         SocialIdentityTokenVerifier.VerifiedSocialIdentity identity =
                 new SocialIdentityTokenVerifier.VerifiedSocialIdentity(
                         SocialProvider.GOOGLE,
@@ -69,10 +68,9 @@ class SocialLoginTransactionServiceTests {
                 .thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenAnswer(call -> call.getArgument(0));
 
-        User user = service.findOrCreate(identity, request(AccountType.MERCHANT));
+        User user = service.findOrCreate(identity, request(true));
 
         assertEquals(UserStatus.VERIFIED, user.getStatus());
-        assertEquals(AccountType.MERCHANT, user.getAccountType());
         assertEquals(UserRole.BUYER, user.getRole());
         assertNull(user.getPasswordHash());
         assertNull(user.getPhoneNumber());
@@ -85,7 +83,7 @@ class SocialLoginTransactionServiceTests {
     void existingProviderIdentityDoesNotRequireRegistrationFieldsAgain() {
         User user = new User(
                 "An", "Nguyen", "user@gmail.com", null, null,
-                UserRole.BUYER, UserStatus.VERIFIED, AccountType.BUYER
+                UserRole.BUYER, UserStatus.VERIFIED
         );
         ExternalAuthIdentity existing = new ExternalAuthIdentity(
                 user,
@@ -107,25 +105,24 @@ class SocialLoginTransactionServiceTests {
                         ""
                 );
 
-        User result = service.findOrCreate(identity, request(null));
+        User result = service.findOrCreate(identity, request(false));
 
         assertEquals(user, result);
         verify(userRepository, never()).save(any());
         verify(consentService, never()).recordRequiredConsents(any(), any(), any());
     }
 
-    private SocialLoginRequest request(AccountType accountType) {
+    private SocialLoginRequest request(boolean includeRegistrationFields) {
         return new SocialLoginRequest(
                 SocialProvider.GOOGLE,
                 "identity-token",
                 "nonce",
-                accountType,
                 null,
                 null,
-                accountType == null ? null : true,
-                accountType == null ? null : "terms-v1",
-                accountType == null ? null : true,
-                accountType == null ? null : "privacy-v1"
+                includeRegistrationFields ? true : null,
+                includeRegistrationFields ? "terms-v1" : null,
+                includeRegistrationFields ? true : null,
+                includeRegistrationFields ? "privacy-v1" : null
         );
     }
 }

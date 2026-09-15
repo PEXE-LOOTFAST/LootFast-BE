@@ -30,7 +30,7 @@ public class SignupController {
     }
 
     @Operation(summary = "Đăng ký tài khoản",
-            description = "Tạo tài khoản mới, ghi nhận phiên bản điều khoản/chính sách đã đồng ý và gửi OTP email. Chọn MERCHANT chỉ định tuyến sang hồ sơ xét duyệt, không tự cấp quyền người bán.")
+            description = "Tạo tài khoản BUYER, ghi nhận phiên bản điều khoản/chính sách đã đồng ý và gửi OTP email. Quyền MERCHANT chỉ được thêm sau khi giấy phép người bán được duyệt.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "201",
@@ -39,11 +39,9 @@ public class SignupController {
                             examples = @ExampleObject(value = """
                                     {
                                       "success": true,
-                                      "data": {
-                                        "message": "Verification code sent to kien@gmail.com",
-                                        "email": "kien@gmail.com",
-                                        "accountType": "BUYER",
-                                        "nextAction": "BUYER_HOME"
+                                        "data": {
+                                          "message": "Verification code sent to kien@gmail.com",
+                                        "email": "kien@gmail.com"
                                       },
                                       "traceId": "abc-123",
                                       "timestamp": "2026-09-09T08:00:00Z"

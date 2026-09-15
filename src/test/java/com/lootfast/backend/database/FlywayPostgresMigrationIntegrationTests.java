@@ -33,7 +33,7 @@ class FlywayPostgresMigrationIntegrationTests {
             .waitingFor(Wait.forListeningPort());
 
     @Test
-    void latestMigrationUpgradesADataBearingV10Database() throws Exception {
+    void latestMigrationsUpgradeADataBearingV10Database() throws Exception {
         String jdbcUrl = "jdbc:postgresql://%s:%d/%s".formatted(
                 POSTGRES.getHost(),
                 POSTGRES.getMappedPort(5432),
@@ -56,7 +56,7 @@ class FlywayPostgresMigrationIntegrationTests {
                 .load()
                 .migrate();
 
-        assertEquals(1, result.migrationsExecuted);
+        assertEquals(2, result.migrationsExecuted);
         try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
              var statement = connection.prepareStatement("""
                      select
@@ -72,15 +72,24 @@ class FlywayPostgresMigrationIntegrationTests {
                          ) as feature_table_count,
                          (
                              select count(*)
-                             from users
-                             where email = 'merchant@example.com'
-                               and account_type = 'MERCHANT'
-                         ) as migrated_merchant_count
+                             from user_roles roles
+                             join users on users.id = roles.user_id
+                             where users.email = 'merchant@example.com'
+                               and roles.role in ('BUYER', 'MERCHANT')
+                         ) as retained_role_count,
+                         (
+                             select count(*)
+                             from information_schema.columns
+                             where table_schema = 'public'
+                               and table_name = 'users'
+                               and column_name = 'account_type'
+                         ) as account_type_column_count
                      """)) {
             try (var rows = statement.executeQuery()) {
                 assertTrue(rows.next());
                 assertEquals(3, rows.getInt(1));
-                assertEquals(1, rows.getInt(2));
+                assertEquals(2, rows.getInt(2));
+                assertEquals(0, rows.getInt(3));
             }
         }
     }

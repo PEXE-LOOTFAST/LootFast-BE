@@ -91,8 +91,7 @@ public class SocialLoginTransactionService {
                 null,
                 null,
                 UserRole.BUYER,
-                UserStatus.VERIFIED,
-                request.accountType()
+                UserStatus.VERIFIED
         ));
         userProfileRepository.save(new UserProfile(user, firstName + " " + lastName));
         consentService.recordRequiredConsents(
@@ -104,12 +103,6 @@ public class SocialLoginTransactionService {
     }
 
     private void validateNewAccount(SocialLoginRequest request) {
-        if (request.accountType() == null) {
-            throw new ApiException(
-                    ErrorCode.SOCIAL_REGISTRATION_REQUIRED,
-                    "Account type is required for first-time social login"
-            );
-        }
         if (!Boolean.TRUE.equals(request.termsAccepted())
                 || !Boolean.TRUE.equals(request.privacyPolicyAccepted())
                 || isBlank(request.termsVersion())

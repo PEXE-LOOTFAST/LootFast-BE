@@ -53,10 +53,6 @@ public class User {
     @Column(name = "phone_number", length = 9)
     private String phoneNumber;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "account_type", nullable = false, length = 32)
-    private AccountType accountType;
-
     @ElementCollection(fetch = FetchType.LAZY)
     @BatchSize(size = 50)
     @CollectionTable(
@@ -86,20 +82,6 @@ public class User {
             UserRole role,
             UserStatus status
     ) {
-        this(firstName, lastName, email, phoneNumber, passwordHash, role, status,
-                AccountType.BUYER);
-    }
-
-    public User(
-            String firstName,
-            String lastName,
-            String email,
-            String phoneNumber,
-            String passwordHash,
-            UserRole role,
-            UserStatus status,
-            AccountType accountType
-    ) {
         this.firstName = firstName;
         this.lastName = lastName;
         this.email = email;
@@ -107,7 +89,6 @@ public class User {
         this.passwordHash = passwordHash;
         this.roles.add(role);
         this.status = status;
-        this.accountType = accountType;
     }
 
     @PrePersist
@@ -138,10 +119,6 @@ public class User {
 
     public String getPhoneNumber() {
         return phoneNumber;
-    }
-
-    public AccountType getAccountType() {
-        return accountType;
     }
 
     public String getPasswordHash() {

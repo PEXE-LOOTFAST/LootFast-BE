@@ -1,12 +1,9 @@
 package com.lootfast.backend.auth.social;
 
-import com.lootfast.backend.auth.dto.OnboardingAction;
 import com.lootfast.backend.auth.dto.SigninResponse;
 import com.lootfast.backend.auth.dto.SocialLoginRequest;
 import com.lootfast.backend.auth.service.JwtService;
-import com.lootfast.backend.auth.service.OnboardingService;
 import com.lootfast.backend.auth.session.AuthSessionService;
-import com.lootfast.backend.user.entity.AccountType;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserRole;
 import com.lootfast.backend.user.entity.UserStatus;
@@ -28,7 +25,6 @@ class SocialLoginServiceTests {
     @Mock private SocialLoginTransactionService transactionService;
     @Mock private JwtService jwtService;
     @Mock private AuthSessionService authSessionService;
-    @Mock private OnboardingService onboardingService;
 
     private SocialLoginService service;
 
@@ -39,8 +35,7 @@ class SocialLoginServiceTests {
                 tokenVerifier,
                 transactionService,
                 jwtService,
-                authSessionService,
-                onboardingService
+                authSessionService
         );
     }
 
@@ -50,7 +45,6 @@ class SocialLoginServiceTests {
                 SocialProvider.GOOGLE,
                 "identity-token",
                 "one-time-nonce",
-                AccountType.BUYER,
                 null,
                 null,
                 true,
@@ -68,7 +62,7 @@ class SocialLoginServiceTests {
                 );
         User user = new User(
                 "An", "Nguyen", "user@gmail.com", null, null,
-                UserRole.BUYER, UserStatus.VERIFIED, AccountType.BUYER
+                UserRole.BUYER, UserStatus.VERIFIED
         );
         when(tokenVerifier.verify(
                 SocialProvider.GOOGLE,
@@ -80,13 +74,11 @@ class SocialLoginServiceTests {
                 .thenReturn(new JwtService.IssuedToken("access-token", 900));
         when(authSessionService.createSession(user))
                 .thenReturn(new AuthSessionService.IssuedSession("refresh-token", 2_592_000));
-        when(onboardingService.nextAction(user)).thenReturn(OnboardingAction.BUYER_HOME);
-
         SigninResponse response = service.login(request);
 
         assertEquals("access-token", response.accessToken());
         assertEquals("refresh-token", response.refreshToken());
-        assertEquals(OnboardingAction.BUYER_HOME, response.nextAction());
+        assertEquals(UserRole.BUYER, response.role());
         var order = inOrder(nonceService, tokenVerifier);
         order.verify(nonceService).consume("one-time-nonce");
         order.verify(tokenVerifier).verify(

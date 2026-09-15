@@ -1,12 +1,9 @@
 package com.lootfast.backend.user.service;
 
-import com.lootfast.backend.auth.service.OnboardingService;
-import com.lootfast.backend.auth.dto.OnboardingAction;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.dto.CurrentUserResponse;
 import com.lootfast.backend.user.entity.User;
-import com.lootfast.backend.user.entity.AccountType;
 import com.lootfast.backend.user.entity.UserProfile;
 import com.lootfast.backend.user.entity.UserRole;
 import com.lootfast.backend.user.repository.UserProfileRepository;
@@ -38,17 +35,13 @@ class CurrentUserServiceTests {
     @Mock
     private UserProfileRepository userProfileRepository;
 
-    @Mock
-    private OnboardingService onboardingService;
-
     private CurrentUserService currentUserService;
 
     @BeforeEach
     void setUp() {
         currentUserService = new CurrentUserService(
                 userRepository,
-                userProfileRepository,
-                onboardingService
+                userProfileRepository
         );
     }
 
@@ -65,8 +58,6 @@ class CurrentUserServiceTests {
         when(user.getLastName()).thenReturn("Nguyen Van");
         when(user.getEmail()).thenReturn("kien@gmail.com");
         when(user.getPhoneNumber()).thenReturn("912345678");
-        when(user.getAccountType()).thenReturn(AccountType.BUYER);
-        when(onboardingService.nextAction(user)).thenReturn(OnboardingAction.BUYER_HOME);
         when(user.getRole()).thenReturn(UserRole.BUYER);
         when(user.getRoles()).thenReturn(Set.of(UserRole.BUYER));
         when(user.getCreatedAt()).thenReturn(createdAt);
@@ -83,8 +74,6 @@ class CurrentUserServiceTests {
         assertEquals("Nguyen Van", response.lastName());
         assertEquals("kien@gmail.com", response.email());
         assertEquals("912345678", response.phoneNumber());
-        assertEquals(AccountType.BUYER, response.accountType());
-        assertEquals(OnboardingAction.BUYER_HOME, response.nextAction());
         assertEquals(UserRole.BUYER, response.role());
         assertEquals("Kien foodie", response.displayName());
         assertEquals("https://cdn.lootfast.test/avatar.png", response.avatarUrl());

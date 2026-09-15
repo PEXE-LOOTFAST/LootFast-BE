@@ -3,7 +3,6 @@ package com.lootfast.backend.auth.social;
 import com.lootfast.backend.auth.dto.SigninResponse;
 import com.lootfast.backend.auth.dto.SocialLoginRequest;
 import com.lootfast.backend.auth.service.JwtService;
-import com.lootfast.backend.auth.service.OnboardingService;
 import com.lootfast.backend.auth.session.AuthSessionService;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
@@ -20,22 +19,19 @@ public class SocialLoginService {
     private final SocialLoginTransactionService transactionService;
     private final JwtService jwtService;
     private final AuthSessionService authSessionService;
-    private final OnboardingService onboardingService;
 
     public SocialLoginService(
             SocialNonceService nonceService,
             SocialIdentityTokenVerifier tokenVerifier,
             SocialLoginTransactionService transactionService,
             JwtService jwtService,
-            AuthSessionService authSessionService,
-            OnboardingService onboardingService
+            AuthSessionService authSessionService
     ) {
         this.nonceService = nonceService;
         this.tokenVerifier = tokenVerifier;
         this.transactionService = transactionService;
         this.jwtService = jwtService;
         this.authSessionService = authSessionService;
-        this.onboardingService = onboardingService;
     }
 
     public SigninResponse login(SocialLoginRequest request) {
@@ -67,8 +63,6 @@ public class SocialLoginService {
                 user.getFirstName(),
                 user.getLastName(),
                 user.getEmail(),
-                user.getAccountType(),
-                onboardingService.nextAction(user),
                 user.getRole(),
                 user.getRoles()
         );

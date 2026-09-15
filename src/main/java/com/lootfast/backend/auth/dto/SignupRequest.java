@@ -1,10 +1,8 @@
 package com.lootfast.backend.auth.dto;
 
-import com.lootfast.backend.user.entity.AccountType;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -34,9 +32,6 @@ public record SignupRequest(
         @NotBlank(message = "Password confirmation is required")
         @Size(min = 8, max = 72, message = "Password confirmation must be between 8 and 72 characters")
         String confirmPassword,
-
-        @NotNull(message = "Account type is required")
-        AccountType accountType,
 
         @AssertTrue(message = "Terms of use must be accepted")
         boolean termsAccepted,

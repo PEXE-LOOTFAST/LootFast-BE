@@ -26,20 +26,17 @@ public class SignupService {
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
     private final ConsentService consentService;
-    private final OnboardingService onboardingService;
 
     public SignupService(UserRepository userRepository,
                          UserProfileRepository userProfileRepository,
                          PasswordEncoder passwordEncoder,
                          ApplicationEventPublisher eventPublisher,
-                         ConsentService consentService,
-                         OnboardingService onboardingService) {
+                         ConsentService consentService) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.passwordEncoder = passwordEncoder;
         this.eventPublisher = eventPublisher;
         this.consentService = consentService;
-        this.onboardingService = onboardingService;
     }
 
     @Transactional
@@ -68,8 +65,7 @@ public class SignupService {
                 normalizedPhone,
                 passwordEncoder.encode(request.password()),
                 UserRole.BUYER,
-                UserStatus.UNVERIFIED,
-                request.accountType()
+                UserStatus.UNVERIFIED
         );
 
         User savedUser = userRepository.save(user);
@@ -88,9 +84,7 @@ public class SignupService {
 
         return new SignupResponse(
                 "Verification code sent to " + normalizedEmail,
-                normalizedEmail,
-                savedUser.getAccountType(),
-                onboardingService.nextAction(savedUser)
+                normalizedEmail
         );
     }
 

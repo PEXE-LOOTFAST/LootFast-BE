@@ -1,7 +1,5 @@
 package com.lootfast.backend.user.dto;
 
-import com.lootfast.backend.auth.dto.OnboardingAction;
-import com.lootfast.backend.user.entity.AccountType;
 import com.lootfast.backend.user.entity.UserRole;
 
 import java.time.Instant;
@@ -15,8 +13,6 @@ public record CurrentUserResponse(
         String lastName,
         String email,
         String phoneNumber,
-        AccountType accountType,
-        OnboardingAction nextAction,
         UserRole role,
         Set<UserRole> roles,
         String displayName,

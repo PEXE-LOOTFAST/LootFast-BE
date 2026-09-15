@@ -20,18 +20,15 @@ public class SigninService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthSessionService authSessionService;
-    private final OnboardingService onboardingService;
 
     public SigninService(UserRepository userRepository,
                          PasswordEncoder passwordEncoder,
                          JwtService jwtService,
-                         AuthSessionService authSessionService,
-                         OnboardingService onboardingService) {
+                         AuthSessionService authSessionService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authSessionService = authSessionService;
-        this.onboardingService = onboardingService;
     }
 
     @Transactional
@@ -65,8 +62,6 @@ public class SigninService {
                 user.getFirstName(),
                 user.getLastName(),
                 user.getEmail(),
-                user.getAccountType(),
-                onboardingService.nextAction(user),
                 user.getRole(),
                 user.getRoles()
         );

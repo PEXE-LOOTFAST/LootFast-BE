@@ -1,7 +1,6 @@
 package com.lootfast.backend.auth.dto;
 
 import com.lootfast.backend.auth.social.SocialProvider;
-import com.lootfast.backend.user.entity.AccountType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -17,8 +16,6 @@ public record SocialLoginRequest(
         @NotBlank(message = "Nonce is required")
         @Size(max = 200, message = "Nonce is too large")
         String nonce,
-
-        AccountType accountType,
 
         @Size(max = 100, message = "First name must not exceed 100 characters")
         String firstName,

@@ -45,7 +45,7 @@ public class SocialLoginController {
 
     @Operation(
             summary = "Đăng nhập nhanh bằng Google hoặc Apple",
-            description = "Backend xác minh chữ ký, issuer, audience, hạn token, email đã xác minh và nonce. Tài khoản mới phải gửi loại tài khoản cùng phiên bản điều khoản/chính sách đã đồng ý."
+            description = "Backend xác minh chữ ký, issuer, audience, hạn token, email đã xác minh và nonce. Tài khoản mới luôn có role BUYER và phải gửi phiên bản điều khoản/chính sách đã đồng ý."
     )
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<SigninResponse>> login(

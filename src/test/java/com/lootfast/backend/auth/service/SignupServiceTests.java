@@ -3,11 +3,9 @@ package com.lootfast.backend.auth.service;
 import com.lootfast.backend.auth.dto.SignupRequest;
 import com.lootfast.backend.auth.dto.SignupResponse;
 import com.lootfast.backend.auth.event.SignupCreatedEvent;
-import com.lootfast.backend.auth.dto.OnboardingAction;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.entity.User;
-import com.lootfast.backend.user.entity.AccountType;
 import com.lootfast.backend.user.entity.UserProfile;
 import com.lootfast.backend.user.entity.UserRole;
 import com.lootfast.backend.user.entity.UserStatus;
@@ -39,7 +37,6 @@ class SignupServiceTests {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private ConsentService consentService;
-    @Mock private OnboardingService onboardingService;
 
     private SignupService signupService;
 
@@ -50,8 +47,7 @@ class SignupServiceTests {
                 userProfileRepository,
                 passwordEncoder,
                 eventPublisher,
-                consentService,
-                onboardingService
+                consentService
         );
     }
 
@@ -60,8 +56,6 @@ class SignupServiceTests {
         SignupRequest request = request("New.User@Gmail.com", "912345678", "password123");
         when(passwordEncoder.encode("password123")).thenReturn("encoded-password");
         when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
-        when(onboardingService.nextAction(any(User.class)))
-                .thenReturn(OnboardingAction.BUYER_HOME);
 
         SignupResponse response = signupService.signup(request);
 
@@ -72,7 +66,6 @@ class SignupServiceTests {
         assertEquals("new.user@gmail.com", saved.getEmail());
         assertEquals("encoded-password", saved.getPasswordHash());
         assertEquals(UserRole.BUYER, saved.getRole());
-        assertEquals(AccountType.BUYER, saved.getAccountType());
         assertEquals(UserStatus.UNVERIFIED, saved.getStatus());
 
         ArgumentCaptor<UserProfile> profileCaptor = ArgumentCaptor.forClass(UserProfile.class);
@@ -87,31 +80,10 @@ class SignupServiceTests {
     }
 
     @Test
-    void merchantSelectionRoutesToApplicationWithoutGrantingMerchantRole() {
-        SignupRequest request = new SignupRequest(
-                "An", "Nguyen", "merchant@gmail.com", "912345678",
-                "password123", "password123", AccountType.MERCHANT,
-                true, "2026-09", true, "2026-09"
-        );
-        when(passwordEncoder.encode("password123")).thenReturn("encoded-password");
-        when(userRepository.save(any(User.class))).thenAnswer(call -> call.getArgument(0));
-        when(onboardingService.nextAction(any(User.class)))
-                .thenReturn(OnboardingAction.MERCHANT_APPLICATION);
-
-        SignupResponse response = signupService.signup(request);
-
-        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(captor.capture());
-        assertEquals(AccountType.MERCHANT, captor.getValue().getAccountType());
-        assertEquals(UserRole.BUYER, captor.getValue().getRole());
-        assertEquals(OnboardingAction.MERCHANT_APPLICATION, response.nextAction());
-    }
-
-    @Test
     void signupRejectsMismatchedPasswordConfirmation() {
         SignupRequest request = new SignupRequest(
                 "An", "Nguyen", "an@gmail.com", "912345678", "password123", "different123",
-                AccountType.BUYER, true, "2026-09", true, "2026-09"
+                true, "2026-09", true, "2026-09"
         );
 
         ApiException ex = assertThrows(ApiException.class, () -> signupService.signup(request));
@@ -121,8 +93,7 @@ class SignupServiceTests {
                 userProfileRepository,
                 passwordEncoder,
                 eventPublisher,
-                consentService,
-                onboardingService
+                consentService
         );
     }
 
@@ -153,7 +124,7 @@ class SignupServiceTests {
     private SignupRequest request(String email, String phone, String password) {
         return new SignupRequest(
                 "An", "Nguyen Van", email, phone, password, password,
-                AccountType.BUYER, true, "2026-09", true, "2026-09"
+                true, "2026-09", true, "2026-09"
         );
     }
 }

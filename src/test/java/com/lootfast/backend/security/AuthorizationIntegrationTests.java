@@ -322,7 +322,6 @@ class AuthorizationIntegrationTests {
                   "phoneNumber": "912345678",
                   "password": "password123",
                   "confirmPassword": "password123",
-                  "accountType": "BUYER",
                   "termsAccepted": true,
                   "termsVersion": "2026-09",
                   "privacyPolicyAccepted": true,
