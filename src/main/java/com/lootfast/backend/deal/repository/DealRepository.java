@@ -17,6 +17,9 @@ import java.util.UUID;
 
 public interface DealRepository extends JpaRepository<Deal, Long> {
 
+    // PostgreSQL treats repeated named parameters as separate bind slots. Cast
+    // nullable guards explicitly; otherwise IS NULL / LIKE can be unknown/bytea.
+    // Timestamp casts are only in null guards; comparisons retain Instant binding.
     @Query("""
             select deal
             from Deal deal
@@ -27,15 +30,15 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
               and deal.availableFrom <= :now
               and deal.availableUntil > :now
               and deal.pickupEnd > :now
-              and (:categoryCode is null or deal.categoryCode = :categoryCode)
-              and (:minDiscountPercent is null
+              and (cast(:categoryCode as String) is null or deal.categoryCode = :categoryCode)
+              and (cast(:minDiscountPercent as Integer) is null
                    or (deal.originalPrice - deal.discountedPrice) * 100
                       >= deal.originalPrice * :minDiscountPercent)
-              and (:pickupFrom is null or deal.pickupEnd > :pickupFrom)
-              and (:pickupTo is null or deal.pickupStart < :pickupTo)
-              and (:searchTerm is null
-                   or deal.searchName like concat('%', :searchTerm, '%')
-                   or merchant.searchName like concat('%', :searchTerm, '%'))
+              and (cast(:pickupFrom as timestamp) is null or deal.pickupEnd > :pickupFrom)
+              and (cast(:pickupTo as timestamp) is null or deal.pickupStart < :pickupTo)
+              and (cast(:searchTerm as String) is null
+                   or deal.searchName like concat('%', cast(:searchTerm as String), '%')
+                   or merchant.searchName like concat('%', cast(:searchTerm as String), '%'))
               and merchant.storeName is not null
               and merchant.latitude between :minLatitude and :maxLatitude
               and (

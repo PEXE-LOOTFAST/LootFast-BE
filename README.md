@@ -1,6 +1,9 @@
 # lootfast-backend
 Java Spring Boot backend for LootFast – end-of-day food deals platform
 
+Release verification and Railway rollout notes:
+[2026-09-16 main release](docs/releases/2026-09-16-main.md).
+
 ## Local development
 
 Start the backend with the Maven Wrapper:
