@@ -65,7 +65,8 @@ class FlywayPostgresMigrationIntegrationTests {
                 .load()
                 .migrate();
 
-        assertEquals(3, result.migrationsExecuted);
+        // V12, V13, V14 and V15 (merchant_bank_accounts) apply on top of V11.
+        assertEquals(4, result.migrationsExecuted);
         try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
              var statement = connection.prepareStatement("""
                      select
