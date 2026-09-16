@@ -458,6 +458,25 @@ Before adding a Maven dependency:
 
 Do not silently change major dependency versions.
 
+## Version compatibility gate
+At the start of every task, inventory the versions of affected runtime components
+and verify that they are mutually compatible before changing code. At minimum,
+check the relevant Java, Spring Boot, Maven Wrapper, PostgreSQL image, Flyway,
+JDBC driver, Redis image, and Testcontainers versions.
+
+Keep each runtime service on the same major version across Docker Compose,
+integration tests, CI, and documentation. Never start an existing PostgreSQL data
+volume with an older major-version image. A PostgreSQL major-version migration
+requires an explicit backup/restore or `pg_upgrade` plan and user approval.
+
+Flyway migrations are immutable after they have run in any shared or developer
+database. Never edit an applied migration to fix or refine it; restore its original
+checksum-compatible contents and add a new forward-only migration instead.
+
+Before finishing every task, run the full Maven verification and, when database or
+runtime behavior is affected, start the application against the declared real
+PostgreSQL major version. Report the observed version matrix and startup result.
+
 ## Code quality
 Prefer code that is:
 - simple;

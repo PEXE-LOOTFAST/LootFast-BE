@@ -18,7 +18,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,7 +39,10 @@ class CurrentUserServiceTests {
 
     @BeforeEach
     void setUp() {
-        currentUserService = new CurrentUserService(userRepository, userProfileRepository);
+        currentUserService = new CurrentUserService(
+                userRepository,
+                userProfileRepository
+        );
     }
 
     @Test

@@ -27,14 +27,34 @@ class GmailSmtpSender implements EmailSender {
 
     @Override
     @Async("emailExecutor")
-    public void sendOtp(String to, String otp) {
+    public void sendSignupOtp(String to, String otp) {
+        sendOtp(
+                to,
+                otp,
+                "LootFast — Mã xác thực đăng ký",
+                "Xác thực tài khoản LootFast"
+        );
+    }
+
+    @Override
+    @Async("emailExecutor")
+    public void sendPasswordResetOtp(String to, String otp) {
+        sendOtp(
+                to,
+                otp,
+                "LootFast — Mã đặt lại mật khẩu",
+                "Đặt lại mật khẩu LootFast"
+        );
+    }
+
+    private void sendOtp(String to, String otp, String subject, String heading) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
             helper.setFrom(from);
             helper.setTo(to);
-            helper.setSubject("LootFast — Mã xác thực đăng ký");
-            helper.setText(buildBody(otp), true);
+            helper.setSubject(subject);
+            helper.setText(buildBody(otp, heading), true);
             mailSender.send(message);
             log.info("OTP email dispatched successfully");
         } catch (MessagingException | MailException e) {
@@ -43,15 +63,15 @@ class GmailSmtpSender implements EmailSender {
         }
     }
 
-    private String buildBody(String otp) {
+    private String buildBody(String otp, String heading) {
         return """
                 <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto">
-                  <h2>Xác thực tài khoản LootFast</h2>
+                  <h2>%s</h2>
                   <p>Mã xác thực của bạn:</p>
                   <h1 style="letter-spacing:8px;color:#e74c3c">%s</h1>
                   <p>Mã có hiệu lực trong <strong>5 phút</strong>.</p>
                   <p style="color:#888;font-size:12px">Nếu bạn không yêu cầu điều này, hãy bỏ qua email này.</p>
                 </div>
-                """.formatted(otp);
+                """.formatted(heading, otp);
     }
 }

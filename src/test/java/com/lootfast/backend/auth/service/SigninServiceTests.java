@@ -54,7 +54,6 @@ class SigninServiceTests {
                 .thenReturn(new JwtService.IssuedToken("access-token", 900));
         when(authSessionService.createSession(user))
                 .thenReturn(new AuthSessionService.IssuedSession("refresh-token", 2_592_000));
-
         SigninResponse response = signinService.signin(
                 new SigninRequest(" Kien@Gmail.com ", "password123"));
 

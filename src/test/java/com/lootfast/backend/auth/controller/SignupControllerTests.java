@@ -34,7 +34,10 @@ class SignupControllerTests {
     @Test
     void signupReturnsOtpSentMessage() throws Exception {
         when(signupService.signup(any())).thenReturn(
-                new SignupResponse("Verification code sent to kien@gmail.com", "kien@gmail.com"));
+                new SignupResponse(
+                        "Verification code sent to kien@gmail.com",
+                        "kien@gmail.com"
+                ));
 
         mockMvc.perform(post("/api/v1/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -57,7 +60,11 @@ class SignupControllerTests {
                                   "email": "kien@yahoo.com",
                                   "phoneNumber": "123",
                                   "password": "password123",
-                                  "confirmPassword": "password123"
+                                  "confirmPassword": "password123",
+                                  "termsAccepted": true,
+                                  "termsVersion": "2026-09",
+                                  "privacyPolicyAccepted": true,
+                                  "privacyPolicyVersion": "2026-09"
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
@@ -101,7 +108,11 @@ class SignupControllerTests {
                   "email": "kien@gmail.com",
                   "phoneNumber": "912345678",
                   "password": "password123",
-                  "confirmPassword": "password123"
+                  "confirmPassword": "password123",
+                  "termsAccepted": true,
+                  "termsVersion": "2026-09",
+                  "privacyPolicyAccepted": true,
+                  "privacyPolicyVersion": "2026-09"
                 }
                 """;
     }

@@ -39,7 +39,8 @@ public class SigninService {
                 .orElseThrow(() -> new ApiException(ErrorCode.INVALID_CREDENTIALS,
                         "Invalid email or password"));
 
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        if (user.getPasswordHash() == null
+                || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new ApiException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
         }
 

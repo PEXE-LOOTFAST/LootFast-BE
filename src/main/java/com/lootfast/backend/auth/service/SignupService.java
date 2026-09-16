@@ -25,15 +25,18 @@ public class SignupService {
     private final UserProfileRepository userProfileRepository;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
+    private final ConsentService consentService;
 
     public SignupService(UserRepository userRepository,
                          UserProfileRepository userProfileRepository,
                          PasswordEncoder passwordEncoder,
-                         ApplicationEventPublisher eventPublisher) {
+                         ApplicationEventPublisher eventPublisher,
+                         ConsentService consentService) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.passwordEncoder = passwordEncoder;
         this.eventPublisher = eventPublisher;
+        this.consentService = consentService;
     }
 
     @Transactional
@@ -70,6 +73,11 @@ public class SignupService {
                 savedUser,
                 defaultDisplayName(savedUser)
         ));
+        consentService.recordRequiredConsents(
+                savedUser,
+                request.termsVersion(),
+                request.privacyPolicyVersion()
+        );
 
         // Listener chỉ xử lý sau khi transaction tạo user commit thành công.
         eventPublisher.publishEvent(new SignupCreatedEvent(normalizedEmail));
