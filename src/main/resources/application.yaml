@@ -107,6 +107,15 @@ security:
     expiration: ${REFRESH_TOKEN_EXPIRATION:30d}
   otp:
     hmac-secret: ${OTP_HMAC_SECRET}
+  social:
+    google:
+      issuer: https://accounts.google.com
+      jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs
+      client-ids: ${GOOGLE_CLIENT_IDS:}
+    apple:
+      issuer: https://appleid.apple.com
+      jwk-set-uri: https://appleid.apple.com/auth/keys
+      client-ids: ${APPLE_CLIENT_IDS:}
 
 storage:
   cloudinary:

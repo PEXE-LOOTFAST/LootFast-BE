@@ -41,16 +41,16 @@ public class User {
     @Column(nullable = false)
     private String email;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "password_hash")
     private String passwordHash;
 
-    @Column(name = "first_name", nullable = false, length = 10)
+    @Column(name = "first_name", nullable = false, length = 100)
     private String firstName;
 
-    @Column(name = "last_name", nullable = false, length = 20)
+    @Column(name = "last_name", nullable = false, length = 100)
     private String lastName;
 
-    @Column(name = "phone_number", nullable = false, length = 9)
+    @Column(name = "phone_number", length = 9)
     private String phoneNumber;
 
     @ElementCollection(fetch = FetchType.LAZY)
@@ -153,6 +153,10 @@ public class User {
 
     public void verify() {
         this.status = UserStatus.VERIFIED;
+    }
+
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     public Instant getCreatedAt() {

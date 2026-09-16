@@ -321,7 +321,11 @@ class AuthorizationIntegrationTests {
                   "email": "kien@gmail.com",
                   "phoneNumber": "912345678",
                   "password": "password123",
-                  "confirmPassword": "password123"
+                  "confirmPassword": "password123",
+                  "termsAccepted": true,
+                  "termsVersion": "2026-09",
+                  "privacyPolicyAccepted": true,
+                  "privacyPolicyVersion": "2026-09"
                 }
                 """;
     }
