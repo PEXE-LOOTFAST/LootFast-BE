@@ -24,7 +24,7 @@ class FlywayPostgresMigrationIntegrationTests {
 
     @Container
     private static final GenericContainer<?> POSTGRES = new GenericContainer<>(
-            DockerImageName.parse("postgres:16-alpine")
+            DockerImageName.parse("postgres:17")
     )
             .withEnv("POSTGRES_DB", DATABASE)
             .withEnv("POSTGRES_USER", USERNAME)
@@ -65,7 +65,7 @@ class FlywayPostgresMigrationIntegrationTests {
                 .load()
                 .migrate();
 
-        assertEquals(2, result.migrationsExecuted);
+        assertEquals(3, result.migrationsExecuted);
         try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
              var statement = connection.prepareStatement("""
                      select

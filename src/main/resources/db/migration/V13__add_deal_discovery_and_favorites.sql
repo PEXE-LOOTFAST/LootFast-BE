@@ -2,18 +2,18 @@ ALTER TABLE deals ADD COLUMN search_name VARCHAR(160);
 ALTER TABLE merchant_profiles ADD COLUMN search_name VARCHAR(120);
 
 UPDATE deals
-SET search_name = regexp_replace(trim(translate(
+SET search_name = trim(translate(
         lower(name),
         'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ',
         'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyyd'
-)), '[[:space:]]+', ' ', 'g');
+));
 
 UPDATE merchant_profiles
-SET search_name = regexp_replace(trim(translate(
+SET search_name = trim(translate(
         lower(store_name),
         'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ',
         'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyyd'
-)), '[[:space:]]+', ' ', 'g')
+))
 WHERE store_name IS NOT NULL;
 
 ALTER TABLE deals ALTER COLUMN search_name SET NOT NULL;
