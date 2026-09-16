@@ -1,7 +1,9 @@
 package com.lootfast.backend.merchant.repository;
 
 import com.lootfast.backend.merchant.entity.MerchantProfile;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,6 +15,10 @@ import java.util.Optional;
 public interface MerchantProfileRepository extends JpaRepository<MerchantProfile, Long> {
 
     Optional<MerchantProfile> findByUserId(Long userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select profile from MerchantProfile profile where profile.user.id = :userId")
+    Optional<MerchantProfile> findByUserIdForUpdate(@Param("userId") Long userId);
 
     boolean existsByUserId(Long userId);
 
