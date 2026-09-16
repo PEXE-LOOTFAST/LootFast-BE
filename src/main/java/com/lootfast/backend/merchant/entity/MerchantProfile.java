@@ -1,5 +1,6 @@
 package com.lootfast.backend.merchant.entity;
 
+import com.lootfast.backend.common.text.SearchNormalizer;
 import com.lootfast.backend.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -42,6 +43,9 @@ public class MerchantProfile {
 
     @Column(name = "store_name", length = 120)
     private String storeName;
+
+    @Column(name = "search_name", length = 120)
+    private String searchName;
 
     @Column(name = "description", length = 1000)
     private String description;
@@ -131,12 +135,14 @@ public class MerchantProfile {
     @PrePersist
     private void beforeInsert() {
         Instant now = Instant.now();
+        searchName = SearchNormalizer.normalize(storeName);
         createdAt = now;
         updatedAt = now;
     }
 
     @PreUpdate
     private void beforeUpdate() {
+        searchName = SearchNormalizer.normalize(storeName);
         updatedAt = Instant.now();
     }
 
@@ -158,6 +164,10 @@ public class MerchantProfile {
 
     public String getStoreName() {
         return storeName;
+    }
+
+    public String getSearchName() {
+        return searchName;
     }
 
     public String getDescription() {

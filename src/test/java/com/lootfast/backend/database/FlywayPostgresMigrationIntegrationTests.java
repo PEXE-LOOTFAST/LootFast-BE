@@ -48,7 +48,16 @@ class FlywayPostgresMigrationIntegrationTests {
                 .migrate();
         assertEquals(10, initialMigration.migrationsExecuted);
 
-        insertExistingMerchant(jdbcUrl);
+        ExistingMerchant existingMerchant = insertExistingMerchant(jdbcUrl);
+
+        MigrateResult dealMigration = Flyway.configure()
+                .dataSource(jdbcUrl, USERNAME, PASSWORD)
+                .locations("classpath:db/migration")
+                .target("11")
+                .load()
+                .migrate();
+        assertEquals(1, dealMigration.migrationsExecuted);
+        insertExistingDeal(jdbcUrl, existingMerchant.profileId());
 
         MigrateResult result = Flyway.configure()
                 .dataSource(jdbcUrl, USERNAME, PASSWORD)
@@ -56,7 +65,7 @@ class FlywayPostgresMigrationIntegrationTests {
                 .load()
                 .migrate();
 
-        assertEquals(2, result.migrationsExecuted);
+        assertEquals(3, result.migrationsExecuted);
         try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
              var statement = connection.prepareStatement("""
                      select
@@ -67,7 +76,8 @@ class FlywayPostgresMigrationIntegrationTests {
                                and table_name in (
                                    'external_auth_identities',
                                    'user_consents',
-                                   'deals'
+                                   'deals',
+                                   'user_favorites'
                                )
                          ) as feature_table_count,
                          (
@@ -83,18 +93,31 @@ class FlywayPostgresMigrationIntegrationTests {
                              where table_schema = 'public'
                                and table_name = 'users'
                                and column_name = 'account_type'
-                         ) as account_type_column_count
+                         ) as account_type_column_count,
+                         (
+                             select search_name
+                             from deals
+                             where name = 'Bánh mì đặc biệt'
+                         ) as normalized_deal_name,
+                         (
+                             select search_name
+                             from merchant_profiles
+                             where id = ?
+                         ) as normalized_store_name
                      """)) {
+            statement.setLong(1, existingMerchant.profileId());
             try (var rows = statement.executeQuery()) {
                 assertTrue(rows.next());
-                assertEquals(3, rows.getInt(1));
+                assertEquals(4, rows.getInt(1));
                 assertEquals(2, rows.getInt(2));
                 assertEquals(0, rows.getInt(3));
+                assertEquals("banh mi dac biet", rows.getString(4));
+                assertEquals("bep viet", rows.getString(5));
             }
         }
     }
 
-    private void insertExistingMerchant(String jdbcUrl) throws Exception {
+    private ExistingMerchant insertExistingMerchant(String jdbcUrl) throws Exception {
         long userId;
         try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
              var statement = connection.prepareStatement("""
@@ -133,5 +156,64 @@ class FlywayPostgresMigrationIntegrationTests {
             statement.setLong(1, userId);
             assertEquals(1, statement.executeUpdate());
         }
+
+        long profileId;
+        try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
+             var statement = connection.prepareStatement("""
+                     insert into merchant_profiles (
+                         user_id,
+                         store_name,
+                         latitude,
+                         longitude,
+                         created_at,
+                         updated_at
+                     ) values (?, 'Bếp Việt', 10.776900, 106.700900, now(), now())
+                     returning id
+                     """)) {
+            statement.setLong(1, userId);
+            try (var rows = statement.executeQuery()) {
+                assertTrue(rows.next());
+                profileId = rows.getLong(1);
+            }
+        }
+        return new ExistingMerchant(userId, profileId);
+    }
+
+    private void insertExistingDeal(String jdbcUrl, long profileId) throws Exception {
+        try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
+             var statement = connection.prepareStatement("""
+                     insert into deals (
+                         public_id,
+                         merchant_profile_id,
+                         name,
+                         category_code,
+                         original_price,
+                         discounted_price,
+                         remaining_quantity,
+                         primary_image_url,
+                         preparation_minutes,
+                         pickup_start,
+                         pickup_end,
+                         available_from,
+                         available_until,
+                         status,
+                         version,
+                         created_at,
+                         updated_at
+                     ) values (
+                         ?, ?, 'Bánh mì đặc biệt', 'BAKERY', 100000, 50000, 3,
+                         'https://cdn.lootfast.test/deal.jpg', 10,
+                         now(), now() + interval '2 hours',
+                         now() - interval '1 hour', now() + interval '2 hours',
+                         'ACTIVE', 0, now(), now()
+                     )
+                     """)) {
+            statement.setObject(1, UUID.randomUUID());
+            statement.setLong(2, profileId);
+            assertEquals(1, statement.executeUpdate());
+        }
+    }
+
+    private record ExistingMerchant(long userId, long profileId) {
     }
 }

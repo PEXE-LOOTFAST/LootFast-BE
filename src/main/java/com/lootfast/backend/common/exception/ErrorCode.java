@@ -28,6 +28,11 @@ public enum ErrorCode {
     AVATAR_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE),
     AVATAR_UPLOAD_FAILED(HttpStatus.BAD_GATEWAY),
 
+    // --- Deal discovery ---
+    DEAL_NOT_FOUND(HttpStatus.NOT_FOUND),
+    INVALID_DEAL_FILTER(HttpStatus.BAD_REQUEST),
+    FAVORITE_LIMIT_REACHED(HttpStatus.CONFLICT),
+
     // --- Merchant ---
     MERCHANT_PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND),
     INVALID_OPENING_HOURS(HttpStatus.BAD_REQUEST),
