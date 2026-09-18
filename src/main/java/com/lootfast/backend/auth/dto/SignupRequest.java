@@ -1,5 +1,6 @@
 package com.lootfast.backend.auth.dto;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -7,11 +8,11 @@ import jakarta.validation.constraints.Size;
 
 public record SignupRequest(
         @NotBlank(message = "First name is required")
-        @Size(max = 10, message = "First name must not exceed 10 characters")
+        @Size(max = 100, message = "First name must not exceed 100 characters")
         String firstName,
 
         @NotBlank(message = "Last name is required")
-        @Size(max = 20, message = "Last name must not exceed 20 characters")
+        @Size(max = 100, message = "Last name must not exceed 100 characters")
         String lastName,
 
         @NotBlank(message = "Email is required")
@@ -30,6 +31,20 @@ public record SignupRequest(
 
         @NotBlank(message = "Password confirmation is required")
         @Size(min = 8, max = 72, message = "Password confirmation must be between 8 and 72 characters")
-        String confirmPassword
+        String confirmPassword,
+
+        @AssertTrue(message = "Terms of use must be accepted")
+        boolean termsAccepted,
+
+        @NotBlank(message = "Terms version is required")
+        @Size(max = 50, message = "Terms version must not exceed 50 characters")
+        String termsVersion,
+
+        @AssertTrue(message = "Privacy policy must be accepted")
+        boolean privacyPolicyAccepted,
+
+        @NotBlank(message = "Privacy policy version is required")
+        @Size(max = 50, message = "Privacy policy version must not exceed 50 characters")
+        String privacyPolicyVersion
 ) {
 }

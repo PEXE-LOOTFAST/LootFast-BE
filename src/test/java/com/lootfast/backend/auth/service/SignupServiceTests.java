@@ -36,6 +36,7 @@ class SignupServiceTests {
     @Mock private UserProfileRepository userProfileRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private ConsentService consentService;
 
     private SignupService signupService;
 
@@ -45,7 +46,8 @@ class SignupServiceTests {
                 userRepository,
                 userProfileRepository,
                 passwordEncoder,
-                eventPublisher
+                eventPublisher,
+                consentService
         );
     }
 
@@ -71,6 +73,7 @@ class SignupServiceTests {
         assertEquals("An Nguyen Van", profileCaptor.getValue().getDisplayName());
 
         verify(eventPublisher).publishEvent(new SignupCreatedEvent("new.user@gmail.com"));
+        verify(consentService).recordRequiredConsents(saved, "2026-09", "2026-09");
 
         assertEquals("new.user@gmail.com", response.email());
         assertTrue(response.message().contains("new.user@gmail.com"));
@@ -79,7 +82,8 @@ class SignupServiceTests {
     @Test
     void signupRejectsMismatchedPasswordConfirmation() {
         SignupRequest request = new SignupRequest(
-                "An", "Nguyen", "an@gmail.com", "912345678", "password123", "different123"
+                "An", "Nguyen", "an@gmail.com", "912345678", "password123", "different123",
+                true, "2026-09", true, "2026-09"
         );
 
         ApiException ex = assertThrows(ApiException.class, () -> signupService.signup(request));
@@ -88,7 +92,8 @@ class SignupServiceTests {
                 userRepository,
                 userProfileRepository,
                 passwordEncoder,
-                eventPublisher
+                eventPublisher,
+                consentService
         );
     }
 
@@ -117,6 +122,9 @@ class SignupServiceTests {
     }
 
     private SignupRequest request(String email, String phone, String password) {
-        return new SignupRequest("An", "Nguyen Van", email, phone, password, password);
+        return new SignupRequest(
+                "An", "Nguyen Van", email, phone, password, password,
+                true, "2026-09", true, "2026-09"
+        );
     }
 }

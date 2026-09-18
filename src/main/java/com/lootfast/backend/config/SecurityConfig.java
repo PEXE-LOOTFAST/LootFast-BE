@@ -20,7 +20,7 @@ import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties(CorsProperties.class)
+@EnableConfigurationProperties({CorsProperties.class, SocialAuthProperties.class})
 public class SecurityConfig {
 
     private final JwtRoleConverter jwtRoleConverter;
@@ -53,12 +53,21 @@ public class SecurityConfig {
                                 "/api/v1/auth/logout",
                                 "/api/v1/auth/verify-otp",
                                 "/api/v1/auth/resend-otp",
+                                "/api/v1/auth/password-reset/request",
+                                "/api/v1/auth/password-reset/confirm",
+                                "/api/v1/auth/social/nonce",
+                                "/api/v1/auth/social/login",
                                 "/actuator/health",
                                 "/actuator/health/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**"
+                        ).permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/deals/**",
+                                "/api/v1/stores/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

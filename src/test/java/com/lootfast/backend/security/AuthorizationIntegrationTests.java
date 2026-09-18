@@ -29,6 +29,7 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -143,6 +144,21 @@ class AuthorizationIntegrationTests {
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
+    void discoveryReadsArePublicButFavoritesRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/deals/{dealId}", UUID.randomUUID()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("DEAL_NOT_FOUND"));
+
+        mockMvc.perform(get("/api/v1/stores/{merchantId}", UUID.randomUUID()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("MERCHANT_PROFILE_NOT_FOUND"));
+
+        mockMvc.perform(get("/api/v1/users/me/favorites"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
     }
 
     @Test
@@ -321,7 +337,11 @@ class AuthorizationIntegrationTests {
                   "email": "kien@gmail.com",
                   "phoneNumber": "912345678",
                   "password": "password123",
-                  "confirmPassword": "password123"
+                  "confirmPassword": "password123",
+                  "termsAccepted": true,
+                  "termsVersion": "2026-09",
+                  "privacyPolicyAccepted": true,
+                  "privacyPolicyVersion": "2026-09"
                 }
                 """;
     }

@@ -1,0 +1,219 @@
+package com.lootfast.backend.database;
+
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.output.MigrateResult;
+import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+
+import java.sql.DriverManager;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@Testcontainers(disabledWithoutDocker = true)
+class FlywayPostgresMigrationIntegrationTests {
+
+    private static final String DATABASE = "lootfast_test";
+    private static final String USERNAME = "lootfast";
+    private static final String PASSWORD = "test-password";
+
+    @Container
+    private static final GenericContainer<?> POSTGRES = new GenericContainer<>(
+            DockerImageName.parse("postgres:17")
+    )
+            .withEnv("POSTGRES_DB", DATABASE)
+            .withEnv("POSTGRES_USER", USERNAME)
+            .withEnv("POSTGRES_PASSWORD", PASSWORD)
+            .withExposedPorts(5432)
+            .waitingFor(Wait.forListeningPort());
+
+    @Test
+    void latestMigrationsUpgradeADataBearingV10Database() throws Exception {
+        String jdbcUrl = "jdbc:postgresql://%s:%d/%s".formatted(
+                POSTGRES.getHost(),
+                POSTGRES.getMappedPort(5432),
+                DATABASE
+        );
+
+        MigrateResult initialMigration = Flyway.configure()
+                .dataSource(jdbcUrl, USERNAME, PASSWORD)
+                .locations("classpath:db/migration")
+                .target("10")
+                .load()
+                .migrate();
+        assertEquals(10, initialMigration.migrationsExecuted);
+
+        ExistingMerchant existingMerchant = insertExistingMerchant(jdbcUrl);
+
+        MigrateResult dealMigration = Flyway.configure()
+                .dataSource(jdbcUrl, USERNAME, PASSWORD)
+                .locations("classpath:db/migration")
+                .target("11")
+                .load()
+                .migrate();
+        assertEquals(1, dealMigration.migrationsExecuted);
+        insertExistingDeal(jdbcUrl, existingMerchant.profileId());
+
+        MigrateResult result = Flyway.configure()
+                .dataSource(jdbcUrl, USERNAME, PASSWORD)
+                .locations("classpath:db/migration")
+                .load()
+                .migrate();
+
+        assertEquals(3, result.migrationsExecuted);
+        try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
+             var statement = connection.prepareStatement("""
+                     select
+                         (
+                             select count(*)
+                             from information_schema.tables
+                             where table_schema = 'public'
+                               and table_name in (
+                                   'external_auth_identities',
+                                   'user_consents',
+                                   'deals',
+                                   'user_favorites'
+                               )
+                         ) as feature_table_count,
+                         (
+                             select count(*)
+                             from user_roles roles
+                             join users on users.id = roles.user_id
+                             where users.email = 'merchant@example.com'
+                               and roles.role in ('BUYER', 'MERCHANT')
+                         ) as retained_role_count,
+                         (
+                             select count(*)
+                             from information_schema.columns
+                             where table_schema = 'public'
+                               and table_name = 'users'
+                               and column_name = 'account_type'
+                         ) as account_type_column_count,
+                         (
+                             select search_name
+                             from deals
+                             where name = 'Bánh mì đặc biệt'
+                         ) as normalized_deal_name,
+                         (
+                             select search_name
+                             from merchant_profiles
+                             where id = ?
+                         ) as normalized_store_name
+                     """)) {
+            statement.setLong(1, existingMerchant.profileId());
+            try (var rows = statement.executeQuery()) {
+                assertTrue(rows.next());
+                assertEquals(4, rows.getInt(1));
+                assertEquals(2, rows.getInt(2));
+                assertEquals(0, rows.getInt(3));
+                assertEquals("banh mi dac biet", rows.getString(4));
+                assertEquals("bep viet", rows.getString(5));
+            }
+        }
+    }
+
+    private ExistingMerchant insertExistingMerchant(String jdbcUrl) throws Exception {
+        long userId;
+        try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
+             var statement = connection.prepareStatement("""
+                     insert into users (
+                         public_id,
+                         email,
+                         password_hash,
+                         first_name,
+                         last_name,
+                         phone_number,
+                         role,
+                         status,
+                         created_at
+                     ) values (?, ?, ?, ?, ?, ?, ?, ?, now())
+                     returning id
+                     """)) {
+            statement.setObject(1, UUID.randomUUID());
+            statement.setString(2, "merchant@example.com");
+            statement.setString(3, "encoded-password");
+            statement.setString(4, "Minh");
+            statement.setString(5, "Tran");
+            statement.setString(6, "123456789");
+            statement.setString(7, "BUYER");
+            statement.setString(8, "VERIFIED");
+            try (var rows = statement.executeQuery()) {
+                assertTrue(rows.next());
+                userId = rows.getLong(1);
+            }
+        }
+
+        try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
+             var statement = connection.prepareStatement("""
+                     insert into user_roles (user_id, role)
+                     values (?, 'MERCHANT')
+                     """)) {
+            statement.setLong(1, userId);
+            assertEquals(1, statement.executeUpdate());
+        }
+
+        long profileId;
+        try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
+             var statement = connection.prepareStatement("""
+                     insert into merchant_profiles (
+                         user_id,
+                         store_name,
+                         latitude,
+                         longitude,
+                         created_at,
+                         updated_at
+                     ) values (?, 'Bếp Việt', 10.776900, 106.700900, now(), now())
+                     returning id
+                     """)) {
+            statement.setLong(1, userId);
+            try (var rows = statement.executeQuery()) {
+                assertTrue(rows.next());
+                profileId = rows.getLong(1);
+            }
+        }
+        return new ExistingMerchant(userId, profileId);
+    }
+
+    private void insertExistingDeal(String jdbcUrl, long profileId) throws Exception {
+        try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
+             var statement = connection.prepareStatement("""
+                     insert into deals (
+                         public_id,
+                         merchant_profile_id,
+                         name,
+                         category_code,
+                         original_price,
+                         discounted_price,
+                         remaining_quantity,
+                         primary_image_url,
+                         preparation_minutes,
+                         pickup_start,
+                         pickup_end,
+                         available_from,
+                         available_until,
+                         status,
+                         version,
+                         created_at,
+                         updated_at
+                     ) values (
+                         ?, ?, 'Bánh mì đặc biệt', 'BAKERY', 100000, 50000, 3,
+                         'https://cdn.lootfast.test/deal.jpg', 10,
+                         now(), now() + interval '2 hours',
+                         now() - interval '1 hour', now() + interval '2 hours',
+                         'ACTIVE', 0, now(), now()
+                     )
+                     """)) {
+            statement.setObject(1, UUID.randomUUID());
+            statement.setLong(2, profileId);
+            assertEquals(1, statement.executeUpdate());
+        }
+    }
+
+    private record ExistingMerchant(long userId, long profileId) {
+    }
+}
