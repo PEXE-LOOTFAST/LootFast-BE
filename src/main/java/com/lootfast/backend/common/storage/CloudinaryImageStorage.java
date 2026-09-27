@@ -54,6 +54,25 @@ public class CloudinaryImageStorage implements ImageStorage {
         }
     }
 
+    @Override
+    public void delete(String storageKey) {
+        if (storageKey == null || storageKey.isBlank()) {
+            return;
+        }
+        if (!properties.isConfigured()) {
+            throw new ImageStorageException("Cloudinary image storage is not configured");
+        }
+        try {
+            cloudinary.uploader().destroy(storageKey, ObjectUtils.asMap(
+                    "resource_type", "image",
+                    "invalidate", true
+            ));
+        } catch (IOException | RuntimeException exception) {
+            log.error("Cloudinary image deletion failed for key {}", storageKey, exception);
+            throw new ImageStorageException("Image storage provider rejected the deletion", exception);
+        }
+    }
+
     private String requiredValue(Map<?, ?> result, String key) {
         Object value = result.get(key);
         if (value == null || value.toString().isBlank()) {

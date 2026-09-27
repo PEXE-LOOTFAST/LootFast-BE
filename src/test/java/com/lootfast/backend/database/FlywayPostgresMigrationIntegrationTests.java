@@ -24,7 +24,7 @@ class FlywayPostgresMigrationIntegrationTests {
 
     @Container
     private static final GenericContainer<?> POSTGRES = new GenericContainer<>(
-            DockerImageName.parse("postgres:17")
+            DockerImageName.parse("postgres:18.6")
     )
             .withEnv("POSTGRES_DB", DATABASE)
             .withEnv("POSTGRES_USER", USERNAME)
@@ -65,8 +65,9 @@ class FlywayPostgresMigrationIntegrationTests {
                 .load()
                 .migrate();
 
-        // V12, V13, V14 and V15 (merchant_bank_accounts) apply on top of V11.
-        assertEquals(4, result.migrationsExecuted);
+        // V12-V18, including merchant bank accounts, order records, MoMo removal,
+        // and merchant deal management, apply on V11.
+        assertEquals(7, result.migrationsExecuted);
         try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
              var statement = connection.prepareStatement("""
                      select
@@ -104,7 +105,19 @@ class FlywayPostgresMigrationIntegrationTests {
                              select search_name
                              from merchant_profiles
                              where id = ?
-                         ) as normalized_store_name
+                         ) as normalized_store_name,
+                         (
+                             select total_quantity
+                             from deals
+                             where name = 'Bánh mì đặc biệt'
+                         ) as migrated_total_quantity,
+                         (
+                             select count(*)
+                             from deal_images images
+                             join deals on deals.id = images.deal_id
+                             where deals.name = 'Bánh mì đặc biệt'
+                               and images.status = 'ACTIVE'
+                         ) as migrated_image_count
                      """)) {
             statement.setLong(1, existingMerchant.profileId());
             try (var rows = statement.executeQuery()) {
@@ -114,6 +127,8 @@ class FlywayPostgresMigrationIntegrationTests {
                 assertEquals(0, rows.getInt(3));
                 assertEquals("banh mi dac biet", rows.getString(4));
                 assertEquals("bep viet", rows.getString(5));
+                assertEquals(3, rows.getInt(6));
+                assertEquals(1, rows.getInt(7));
             }
         }
     }

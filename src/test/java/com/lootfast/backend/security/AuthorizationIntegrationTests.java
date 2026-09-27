@@ -118,11 +118,15 @@ class AuthorizationIntegrationTests {
                         .header(HttpHeaders.ORIGIN, "http://localhost:5173")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.GET.name())
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS,
-                                HttpHeaders.AUTHORIZATION))
+                                HttpHeaders.AUTHORIZATION + ",Idempotency-Key"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(
                         HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
                         "http://localhost:5173"
+                ))
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
+                        org.hamcrest.Matchers.containsString("Idempotency-Key")
                 ))
                 .andExpect(header().string(
                         HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
@@ -159,6 +163,19 @@ class AuthorizationIntegrationTests {
         mockMvc.perform(get("/api/v1/users/me/favorites"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void merchantDealManagementRequiresMerchantAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/merchants/me/deals"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        String buyerToken = signupAndSignin();
+        mockMvc.perform(get("/api/v1/merchants/me/deals")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + buyerToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("ACCESS_DENIED"));
     }
 
     @Test

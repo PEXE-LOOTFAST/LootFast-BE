@@ -79,6 +79,25 @@ class DealFeedIntegrationTests {
     }
 
     @Test
+    void feedHandlesEachOptionalFilterIndependently() {
+        var queries = java.util.List.of(
+                new DealDiscoveryQuery(10.776889, 106.700806, 1.0,
+                        "bakery", null, null, null, null, 0, 20),
+                new DealDiscoveryQuery(10.776889, 106.700806, 1.0,
+                        null, "BAKERY", null, null, null, 0, 20),
+                new DealDiscoveryQuery(10.776889, 106.700806, 1.0,
+                        null, null, 40, null, null, 0, 20),
+                new DealDiscoveryQuery(10.776889, 106.700806, 1.0,
+                        null, null, null, NOW.plusSeconds(4_000), null, 0, 20),
+                new DealDiscoveryQuery(10.776889, 106.700806, 1.0,
+                        null, null, null, null, NOW.plusSeconds(6_000), 0, 20)
+        );
+        for (var query : queries) {
+            assertEquals(2, dealFeedService.getFeed(query).totalElements());
+        }
+    }
+
+    @Test
     void feedPaginatesAfterDistanceSorting() {
         PagedResponse<DealFeedItemResponse> response = dealFeedService.getFeed(
                 10.776889,

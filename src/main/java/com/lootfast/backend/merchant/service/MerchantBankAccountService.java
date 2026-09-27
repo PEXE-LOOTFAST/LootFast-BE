@@ -19,13 +19,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class MerchantBankAccountService {
 
+    private final com.lootfast.backend.config.DatabaseLockTimeout lockTimeout;
     private final MerchantBankAccountRepository bankAccountRepository;
     private final MerchantProfileRepository merchantProfileRepository;
+    private final com.lootfast.backend.order.repository.OrderRepository orders;
 
     public MerchantBankAccountService(
             MerchantBankAccountRepository bankAccountRepository,
-            MerchantProfileRepository merchantProfileRepository
+            MerchantProfileRepository merchantProfileRepository,
+            com.lootfast.backend.order.repository.OrderRepository orders,
+            com.lootfast.backend.config.DatabaseLockTimeout lockTimeout
     ) {
+        this.lockTimeout = lockTimeout;
+        this.orders = orders;
         this.bankAccountRepository = bankAccountRepository;
         this.merchantProfileRepository = merchantProfileRepository;
     }
@@ -48,15 +54,19 @@ public class MerchantBankAccountService {
     ) {
         Long userId = parseUserId(subject);
 
-        // Lock the merchant row: confirms the merchant exists and serializes
-        // concurrent updates. TODO(BR-PAY-07): once the order module lands,
-        // reject updates while the merchant still has RESERVED orders.
+        lockTimeout.apply();
+        // Same merchant lock is acquired by reservations before the bank snapshot.
         MerchantProfile merchant = merchantProfileRepository.findByUserIdForUpdate(userId)
                 .orElseThrow(() -> new ApiException(
                         ErrorCode.MERCHANT_PROFILE_NOT_FOUND,
                         "Merchant profile was not found"
                 ));
 
+        if (orders.existsByMerchantIdAndStatus(merchant.getId(),
+                com.lootfast.backend.order.entity.OrderStatus.RESERVED)) {
+            throw new ApiException(ErrorCode.BANK_ACCOUNT_IN_USE,
+                    "Bank account cannot change while reserved orders exist");
+        }
         MerchantBankAccount account = bankAccountRepository.findByMerchantUserId(userId)
                 .map(existing -> {
                     existing.update(
