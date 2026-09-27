@@ -88,9 +88,12 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         boolean licenseDocument = isLicenseDocumentRequest(request);
+        boolean dealImage = isDealImageRequest(request);
         boolean merchantImage = isMerchantImageRequest(request);
         ErrorCode errorCode = licenseDocument
                 ? ErrorCode.LICENSE_DOCUMENT_TOO_LARGE
+                : dealImage
+                        ? ErrorCode.DEAL_IMAGE_TOO_LARGE
                 : merchantImage
                         ? ErrorCode.MERCHANT_IMAGE_TOO_LARGE
                         : ErrorCode.AVATAR_TOO_LARGE;
@@ -98,6 +101,8 @@ public class GlobalExceptionHandler {
                 errorCode.name(),
                 licenseDocument
                         ? "Business license image must not exceed 5 MB"
+                        : dealImage
+                                ? "Deal image file must not exceed 5 MB"
                         : merchantImage
                                 ? "Merchant image file must not exceed 5 MB"
                                 : "Avatar file must not exceed 5 MB"
@@ -113,9 +118,12 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         boolean licenseDocument = isLicenseDocumentRequest(request);
+        boolean dealImage = isDealImageRequest(request);
         boolean merchantImage = isMerchantImageRequest(request);
         ErrorCode errorCode = licenseDocument
                 ? ErrorCode.INVALID_LICENSE_DOCUMENT
+                : dealImage
+                        ? ErrorCode.INVALID_DEAL_IMAGE
                 : merchantImage
                         ? ErrorCode.INVALID_MERCHANT_IMAGE
                         : ErrorCode.INVALID_AVATAR;
@@ -123,6 +131,8 @@ public class GlobalExceptionHandler {
                 errorCode.name(),
                 licenseDocument
                         ? "Business license number and image are required"
+                        : dealImage
+                                ? "Deal image file is required"
                         : merchantImage
                                 ? "Merchant image file is required"
                                 : "Avatar file is required"
@@ -134,6 +144,10 @@ public class GlobalExceptionHandler {
 
     private boolean isMerchantImageRequest(HttpServletRequest request) {
         return request.getServletPath().startsWith("/api/v1/merchants/");
+    }
+
+    private boolean isDealImageRequest(HttpServletRequest request) {
+        return request.getServletPath().matches("/api/v1/merchants/me/deals/[^/]+/images.*");
     }
 
     private boolean isLicenseDocumentRequest(HttpServletRequest request) {
@@ -156,7 +170,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             HandlerMethodValidationException.class,
             MethodArgumentTypeMismatchException.class,
-            MissingServletRequestParameterException.class
+            MissingServletRequestParameterException.class,
+            org.springframework.web.bind.MissingRequestHeaderException.class
     })
     public ResponseEntity<ApiResponse<Void>> handleRequestParameterValidation(
             Exception exception
@@ -177,6 +192,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(ErrorCode.ACCESS_DENIED.getStatus())
                 .body(ApiResponse.error(error));
+    }
+
+    @ExceptionHandler({org.springframework.dao.PessimisticLockingFailureException.class,
+            org.springframework.dao.QueryTimeoutException.class})
+    public ResponseEntity<ApiResponse<Void>> handleBusy(Exception ex) {
+        return ResponseEntity.status(ErrorCode.RESOURCE_BUSY.getStatus())
+            .body(ApiResponse.error(ApiError.of("RESOURCE_BUSY", "Resource is busy; retry with the same key")));
     }
 
     // Catch-all — log đầy đủ cho dev, client chỉ nhận INTERNAL_ERROR (không lộ stack trace)

@@ -59,3 +59,11 @@ merchant logos, they are not exposed through a permanent public URL.
 Merchant logo and cover uploads share a durable Redis-backed limit of 10 uploads
 per account per hour. Requests over the limit return HTTP 429 before Cloudinary is
 called.
+
+## Orders and payments
+
+Order reservations atomically reduce deal inventory and support idempotent
+retries, per-buyer limits, pickup cutoffs, VietQR bank transfer, and cash at
+pickup. See
+[Order reservations and payments](docs/order-reservations-and-payments.md) for the
+API rules and deployment configuration.

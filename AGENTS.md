@@ -76,6 +76,31 @@ git branch --show-current
 
 Do not overwrite unrelated uncommitted changes.
 
+## Checkout identity and local environment safety
+Multiple LootFast checkouts may exist on the same computer. At the beginning of
+every task, record the absolute repository root, current branch, and current HEAD.
+All edits, builds, runtime startup checks, health checks, and final commands must
+refer to that same checkout.
+
+Never validate one checkout by observing a backend process started from a sibling
+checkout. Before reusing or restarting a process, inspect its command or startup
+log and confirm that its classes were loaded from the current repository root. In
+the final report, always state the absolute path of the checkout left running.
+
+The ignored `.env` file is local to each checkout. Before starting Spring Boot,
+verify that `.env` exists in the current repository and that all required variable
+names are present without printing their values. If it is missing, do not launch
+Spring with unresolved placeholders such as `${DB_PORT}` and do not copy secrets
+into tracked files. Report the missing local configuration or, when the user has
+already authorized reuse of the same local development configuration, copy it
+only into the ignored `.env` of the intended checkout.
+
+Before connecting a checkout to an existing database, compare the highest Flyway
+migration available in that checkout with the schema history already applied to
+the database. Never start an older checkout against a database containing newer
+migrations, and never downgrade or delete the database to make it start. Run the
+current checkout that owns those migrations or use a separate database.
+
 ## Commit convention
 Use Conventional Commits:
 - `feat:`
@@ -396,6 +421,54 @@ Before finishing a coding task:
 
 must pass unless there is a clearly documented unrelated reason.
 
+## Local backend availability — required definition of done
+A passing Maven build is necessary, but it does not leave the development server
+running. After every task that changes backend code, configuration, dependencies,
+or database migrations, the current working tree must also be started successfully
+and left available for the developer.
+
+Before making changes:
+- inspect `docker ps` and the configured application port;
+- call the current health endpoint when a LootFast process is already running;
+- identify whether the process listening on that port belongs to this repository;
+- do not stop an unrelated process merely to free the port.
+
+After implementation:
+1. Run `./mvnw --batch-mode clean verify`. This compiles the project and runs the
+   complete verification suite, but it does not start a persistent server.
+2. Ensure the existing PostgreSQL and Redis services are healthy. Start only
+   missing local services with `docker compose up -d postgres-db redis`; this
+   starts the declared services in the background and preserves their named
+   volumes.
+3. Restart the LootFast process when code, `.env`, configuration, dependencies,
+   or migrations changed. Stop only the process previously identified as this
+   repository's backend.
+4. Start the current working tree with `./mvnw --batch-mode spring-boot:run` in a
+   persistent terminal/session. Keep its log available outside the repository if
+   output redirection is needed.
+5. Wait for `Started LootfastBackendApplication`, then call the effective
+   `/actuator/health` URL, including `CONTEXT_PATH` when configured. Completion
+   requires an HTTP success response with status `UP`.
+6. When routes or OpenAPI configuration changed, also verify that `/v3/api-docs`
+   responds successfully at the effective context path.
+
+Leaving the verified local backend running is the default. Do not tear it down as
+cleanup at the end of the task. Temporary containers or application processes used
+for an isolated PostgreSQL-version smoke test may be removed, but afterwards start
+the normal local backend again and leave it running.
+
+If startup fails:
+- inspect the first meaningful error and the deepest useful `Caused by:`;
+- fix the root cause and repeat both Maven verification and runtime startup;
+- do not work around the failure by disabling Flyway, Hibernate schema validation,
+  health checks, authentication, or by deleting database volumes;
+- do not report the coding task as complete while the local backend is down;
+- if the execution environment truly cannot keep a process alive, state that
+  limitation explicitly and give the exact command the developer must run.
+
+The final report must include the application URL, health result, startup database
+version, applied Flyway version, and whether the server was left running.
+
 ## Error handling
 Prefer centralized API error handling as the project grows.
 
@@ -546,6 +619,9 @@ Run:
 ./mvnw clean verify
 ```
 
+Then follow **Local backend availability — required definition of done**: restart
+the current working tree, verify the health endpoint, and leave the backend running.
+
 ### 6. Review
 Show or inspect:
 
@@ -616,6 +692,9 @@ git status
 git diff
 ./mvnw clean verify
 ```
+
+For backend changes, also confirm the local process from the current working tree
+is still running and `/actuator/health` reports `UP`.
 
 Final report should state:
 - what changed;
