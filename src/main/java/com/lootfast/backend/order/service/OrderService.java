@@ -12,6 +12,7 @@ import com.lootfast.backend.order.repository.OrderRepository;
 import com.lootfast.backend.user.entity.*;
 import com.lootfast.backend.user.repository.UserRepository;
 import java.time.*;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -151,6 +152,51 @@ public class OrderService {
     }
     orders.saveAndFlush(order);
     return response;
+  }
+
+  @Transactional(timeout = 10)
+  public OrderResponse cancel(String subject, UUID orderId) {
+    lockTimeout.apply();
+    CustomerOrder order =
+        orders
+            .findForUpdate(orderId)
+            .orElseThrow(() -> error(ErrorCode.ORDER_NOT_FOUND, "Order was not found"));
+    if (!order.getBuyer().getId().equals(userId(subject)))
+      throw error(ErrorCode.ORDER_NOT_FOUND, "Order was not found");
+    if (order.getStatus() != OrderStatus.RESERVED)
+      throw error(ErrorCode.ORDER_NOT_CANCELLABLE, "Order can no longer be cancelled");
+    Instant now = clock.instant();
+    if (!now.isBefore(order.getPickupStart().minusSeconds(1800)))
+      throw error(
+          ErrorCode.ORDER_CANCEL_WINDOW_CLOSED, "Cancel at least 30 minutes before pickup starts");
+    Deal deal =
+        deals
+            .findReservationForUpdate(order.getDeal().getPublicId())
+            .orElseThrow(() -> error(ErrorCode.DEAL_NOT_FOUND, "Deal was not found"));
+    deal.restore(order.getQuantity(), now);
+    order.cancel(now);
+    return OrderResponse.from(order);
+  }
+
+  @Transactional(readOnly = true)
+  public List<UUID> findNoShowCandidates() {
+    return orders.findNoShowCandidates(clock.instant().minusSeconds(1800));
+  }
+
+  /** Called per order by the sweeper; skips silently if the order changed since it was queued. */
+  @Transactional(timeout = 10)
+  public void markNoShow(UUID orderId) {
+    lockTimeout.apply();
+    CustomerOrder order = orders.findForUpdate(orderId).orElse(null);
+    if (order == null || order.getStatus() != OrderStatus.RESERVED) return;
+    Instant now = clock.instant();
+    if (now.isBefore(order.getPickupEnd().plusSeconds(1800))) return;
+    Deal deal =
+        deals
+            .findReservationForUpdate(order.getDeal().getPublicId())
+            .orElseThrow(() -> error(ErrorCode.DEAL_NOT_FOUND, "Deal was not found"));
+    deal.restore(order.getQuantity(), now);
+    order.markNoShow(now);
   }
 
   @Transactional(readOnly = true)

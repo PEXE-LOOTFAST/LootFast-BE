@@ -98,6 +98,9 @@ public class CustomerOrder {
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
 
+  @Column(name = "finalized_at")
+  private Instant finalizedAt;
+
   @Version
   @Column(nullable = false)
   private long version;
@@ -152,6 +155,20 @@ public class CustomerOrder {
 
   public void requirePaymentReview() {
     paymentStatus = PaymentStatus.REVIEW_REQUIRED;
+  }
+
+  public void cancel(Instant now) {
+    if (status != OrderStatus.RESERVED)
+      throw new IllegalStateException("Only reserved orders can be cancelled");
+    status = OrderStatus.CANCELLED;
+    finalizedAt = now;
+  }
+
+  public void markNoShow(Instant now) {
+    if (status != OrderStatus.RESERVED)
+      throw new IllegalStateException("Only reserved orders become no-show");
+    status = OrderStatus.NO_SHOW;
+    finalizedAt = now;
   }
 
   public void changePaymentMethod(PaymentMethod method) {
@@ -216,6 +233,10 @@ public class CustomerOrder {
 
   public String getPaymentReference() {
     return paymentReference;
+  }
+
+  public Instant getFinalizedAt() {
+    return finalizedAt;
   }
 
   public String getRequestFingerprint() {

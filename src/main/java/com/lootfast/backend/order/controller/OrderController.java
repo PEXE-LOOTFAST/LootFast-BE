@@ -43,4 +43,11 @@ public class OrderController {
       @AuthenticationPrincipal Jwt jwt, @PathVariable UUID orderId) {
     return ApiResponse.success(service.get(jwt.getSubject(), orderId));
   }
+
+  @PostMapping("/{orderId}/cancellation")
+  @Operation(summary = "Huỷ đơn đang giữ và hoàn tồn kho; chỉ cho phép trước giờ nhận 30 phút")
+  public ApiResponse<OrderResponse> cancel(
+      @AuthenticationPrincipal Jwt jwt, @PathVariable UUID orderId) {
+    return ApiResponse.success(service.cancel(jwt.getSubject(), orderId));
+  }
 }

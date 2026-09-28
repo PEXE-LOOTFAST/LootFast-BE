@@ -159,6 +159,16 @@ public class Deal {
         if (remainingQuantity == 0) status = DealStatus.SOLD_OUT;
     }
 
+    public void restore(int quantity, Instant now) {
+        if (quantity <= 0) throw new IllegalArgumentException("Invalid restore quantity");
+        remainingQuantity += quantity;
+        if (status == DealStatus.SOLD_OUT
+                && !now.isBefore(availableFrom)
+                && now.isBefore(availableUntil)) {
+            status = DealStatus.ACTIVE;
+        }
+    }
+
     public void updateDraft(
             String name,
             String categoryCode,
