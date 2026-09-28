@@ -29,8 +29,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
+@Transactional
 class OrderCancellationTests {
   private static final Instant NOW = Instant.parse("2030-01-01T00:00:00Z");
 
@@ -48,10 +50,6 @@ class OrderCancellationTests {
   @BeforeEach
   void setup() {
     when(clock.instant()).thenReturn(NOW);
-    orders.deleteAll();
-    deals.deleteAll();
-    merchants.deleteAll();
-    users.deleteAll();
 
     buyer =
         users.save(
