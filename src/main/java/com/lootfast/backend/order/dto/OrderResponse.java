@@ -19,7 +19,8 @@ public record OrderResponse(
     PaymentMethod paymentMethod,
     PaymentStatus paymentStatus,
     String paymentReference,
-    Instant createdAt) {
+    Instant createdAt,
+    Instant finalizedAt) {
   public static OrderResponse from(CustomerOrder o) {
     return new OrderResponse(
         o.getPublicId(),
@@ -35,6 +36,7 @@ public record OrderResponse(
         o.getPaymentMethod(),
         o.getPaymentStatus(),
         o.getPaymentReference(),
-        o.getCreatedAt());
+        o.getCreatedAt(),
+        o.getFinalizedAt());
   }
 }

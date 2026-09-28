@@ -92,8 +92,14 @@ public enum ErrorCode {
     PAYMENT_RETRY_LATER(HttpStatus.TOO_MANY_REQUESTS),
     RESOURCE_BUSY(HttpStatus.CONFLICT),
 
+    // ---oder----
+    ORDER_NOT_CANCELLABLE(HttpStatus.CONFLICT),
+    ORDER_CANCEL_WINDOW_CLOSED(HttpStatus.CONFLICT),
+
     // --- System ---
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
+
+
 
     private final HttpStatus status;
 

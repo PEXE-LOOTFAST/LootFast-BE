@@ -64,6 +64,14 @@ class OrderReservationPostgres18ConcurrencyTests {
   @Autowired MerchantApplicationRepository applications;
   @Autowired MerchantDealService merchantDealService;
 
+  // Tests share one container without a transaction and each builds its own merchant/deal/buyer, so
+  // only the orders table needs clearing: it is the one thing asserted globally (orders.count()),
+  // and nothing references it by foreign key, so wiping it is safe and self-contained.
+  @BeforeEach
+  void clean() {
+    orders.deleteAll();
+  }
+
   @Test
   void concurrentBuyersCannotReserveTheSameLastPortion() throws Exception {
     User merchantUser =
@@ -206,6 +214,75 @@ class OrderReservationPostgres18ConcurrencyTests {
       assertTrue(reloaded.getTotalQuantity() >= reloaded.getRemainingQuantity());
     } finally {
       pool.shutdownNow();
+    }
+  }
+
+  @Test
+  void concurrentCancelRestoresHeldStockExactlyOnce() throws Exception {
+    User merchantUser =
+        users.saveAndFlush(
+            new User(
+                "Merchant",
+                "Cancel",
+                UUID.randomUUID() + "@test.local",
+                null,
+                null,
+                UserRole.MERCHANT,
+                UserStatus.VERIFIED));
+    MerchantProfile merchant = new MerchantProfile(merchantUser);
+    merchant.updateStoreInformation("Cancel store", "description", "MEAL", null, null);
+    merchant.updateLocation("1 Test", "Ward", "District", "City", BigDecimal.TEN, BigDecimal.TEN);
+    merchants.saveAndFlush(merchant);
+    Instant now = Instant.now();
+    Deal deal =
+        deals.saveAndFlush(
+            new Deal(
+                merchant,
+                "Cancel meal",
+                "MEAL",
+                BigDecimal.valueOf(100_000),
+                BigDecimal.valueOf(50_000),
+                3,
+                "https://example.test/image.jpg",
+                10,
+                now.plusSeconds(3600),
+                now.plusSeconds(7200),
+                now.minusSeconds(60),
+                now.plusSeconds(7200),
+                DealStatus.ACTIVE));
+    User buyer = buyer();
+    UUID orderId =
+        service
+            .reserve(
+                buyer.getId().toString(),
+                UUID.randomUUID(),
+                new CreateOrderRequest(deal.getPublicId(), 1, PaymentMethod.CASH))
+            .orderId();
+    assertEquals(2, deals.findByPublicId(deal.getPublicId()).orElseThrow().getRemainingQuantity());
+
+    var pool = Executors.newFixedThreadPool(2);
+    var gate = new CountDownLatch(1);
+    try {
+      Future<String> a = pool.submit(() -> cancel(gate, buyer, orderId));
+      Future<String> b = pool.submit(() -> cancel(gate, buyer, orderId));
+      gate.countDown();
+      List<String> outcomes = List.of(a.get(10, TimeUnit.SECONDS), b.get(10, TimeUnit.SECONDS));
+      assertEquals(1, outcomes.stream().filter("SUCCESS"::equals).count());
+      assertEquals(1, outcomes.stream().filter("ORDER_NOT_CANCELLABLE"::equals).count());
+      assertEquals(
+          3, deals.findByPublicId(deal.getPublicId()).orElseThrow().getRemainingQuantity());
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  private String cancel(CountDownLatch gate, User buyer, UUID orderId) throws Exception {
+    gate.await();
+    try {
+      service.cancel(buyer.getId().toString(), orderId);
+      return "SUCCESS";
+    } catch (ApiException e) {
+      return e.getErrorCode().name();
     }
   }
 
