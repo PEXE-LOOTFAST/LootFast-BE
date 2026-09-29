@@ -28,19 +28,6 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
 
-  # 3. Mail (Gmail SMTP)
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_APP_PASSWORD}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-
   servlet:
     multipart:
       max-file-size: 5MB
@@ -65,11 +52,6 @@ spring:
         format_sql: ${JPA_FORMAT_SQL:false}
 
 management:
-  health:
-    # Email is asynchronous and must not make the whole API unready during
-    # a temporary SMTP outage. Database and Redis indicators remain enabled.
-    mail:
-      enabled: false
   endpoints:
     web:
       exposure:
@@ -84,6 +66,16 @@ app:
   cors:
     # Production must override this with the exact deployed frontend origin(s).
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+
+email:
+  provider: ${EMAIL_PROVIDER:brevo}
+  brevo:
+    base-url: ${BREVO_BASE_URL:https://api.brevo.com/v3}
+    api-key: ${BREVO_API_KEY}
+    from-email: ${BREVO_FROM_EMAIL}
+    from-name: ${BREVO_FROM_NAME:LootFast}
+    connect-timeout: ${BREVO_CONNECT_TIMEOUT:3s}
+    read-timeout: ${BREVO_READ_TIMEOUT:10s}
 
 # 3. Cấu hình Swagger UI (Tài liệu API cho FE)
 springdoc:
