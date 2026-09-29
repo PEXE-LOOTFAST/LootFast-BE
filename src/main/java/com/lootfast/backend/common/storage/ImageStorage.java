@@ -7,4 +7,6 @@ public interface ImageStorage {
             byte[] content,
             ImageUploadPreset preset
     );
+
+    void delete(String storageKey);
 }

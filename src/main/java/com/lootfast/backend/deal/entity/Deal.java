@@ -67,7 +67,10 @@ public class Deal {
     @Column(name = "remaining_quantity", nullable = false)
     private int remainingQuantity;
 
-    @Column(name = "primary_image_url", nullable = false, length = 2048)
+    @Column(name = "total_quantity", nullable = false)
+    private int totalQuantity;
+
+    @Column(name = "primary_image_url", length = 2048)
     private String primaryImageUrl;
 
     @Column(name = "preparation_minutes", nullable = false)
@@ -123,12 +126,15 @@ public class Deal {
         this.originalPrice = originalPrice;
         this.discountedPrice = discountedPrice;
         this.remainingQuantity = remainingQuantity;
+        this.totalQuantity = remainingQuantity;
         this.primaryImageUrl = primaryImageUrl;
         this.preparationMinutes = preparationMinutes;
-        this.pickupStart = pickupStart;
-        this.pickupEnd = pickupEnd;
-        this.availableFrom = availableFrom;
-        this.availableUntil = availableUntil;
+        // PostgreSQL stores timestamptz at microsecond precision. Normalize at the boundary so
+        // the one-window-per-day invariant compares consistently on H2 and PostgreSQL.
+        this.pickupStart = pickupStart.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        this.pickupEnd = pickupEnd.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        this.availableFrom = availableFrom.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        this.availableUntil = availableUntil.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         this.status = status;
     }
 
@@ -145,6 +151,93 @@ public class Deal {
     private void beforeUpdate() {
         searchName = SearchNormalizer.normalize(name);
         updatedAt = Instant.now();
+    }
+
+    public void reserve(int quantity) {
+        if (quantity <= 0 || quantity > remainingQuantity) throw new IllegalArgumentException("Invalid reservation quantity");
+        remainingQuantity -= quantity;
+        if (remainingQuantity == 0) status = DealStatus.SOLD_OUT;
+    }
+
+    public void restore(int quantity, Instant now) {
+        if (quantity <= 0) throw new IllegalArgumentException("Invalid restore quantity");
+        remainingQuantity += quantity;
+        if (status == DealStatus.SOLD_OUT
+                && !now.isBefore(availableFrom)
+                && now.isBefore(availableUntil)) {
+            status = DealStatus.ACTIVE;
+        }
+    }
+
+    public void updateDraft(
+            String name,
+            String categoryCode,
+            BigDecimal originalPrice,
+            BigDecimal discountedPrice,
+            int totalQuantity,
+            int preparationMinutes,
+            Instant pickupStart,
+            Instant pickupEnd,
+            Instant availableFrom,
+            Instant availableUntil
+    ) {
+        if (status != DealStatus.DRAFT) {
+            throw new IllegalStateException("Only draft deals can be edited");
+        }
+        this.name = name;
+        this.categoryCode = categoryCode;
+        this.originalPrice = originalPrice;
+        this.discountedPrice = discountedPrice;
+        this.totalQuantity = totalQuantity;
+        this.remainingQuantity = totalQuantity;
+        this.preparationMinutes = preparationMinutes;
+        this.pickupStart = microsecond(pickupStart);
+        this.pickupEnd = microsecond(pickupEnd);
+        this.availableFrom = microsecond(availableFrom);
+        this.availableUntil = microsecond(availableUntil);
+    }
+
+    public void publish(String primaryImageUrl) {
+        if (status != DealStatus.DRAFT) {
+            throw new IllegalStateException("Only draft deals can be published");
+        }
+        this.primaryImageUrl = primaryImageUrl;
+        this.status = remainingQuantity == 0 ? DealStatus.SOLD_OUT : DealStatus.ACTIVE;
+    }
+
+    public void updatePrimaryImage(String primaryImageUrl) {
+        this.primaryImageUrl = primaryImageUrl;
+    }
+
+    public void hide() {
+        if (status == DealStatus.ACTIVE || status == DealStatus.SOLD_OUT) {
+            status = DealStatus.HIDDEN;
+        }
+    }
+
+    public void changeTotalQuantity(int newTotalQuantity, Instant now) {
+        int committedQuantity = totalQuantity - remainingQuantity;
+        if (newTotalQuantity < committedQuantity) {
+            throw new IllegalArgumentException("Total quantity is below committed quantity");
+        }
+        totalQuantity = newTotalQuantity;
+        remainingQuantity = newTotalQuantity - committedQuantity;
+        if (remainingQuantity == 0 && status == DealStatus.ACTIVE) {
+            status = DealStatus.SOLD_OUT;
+        } else if (remainingQuantity > 0
+                && status == DealStatus.SOLD_OUT
+                && !now.isBefore(availableFrom)
+                && now.isBefore(availableUntil)) {
+            status = DealStatus.ACTIVE;
+        }
+    }
+
+    private static Instant microsecond(Instant value) {
+        return value.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+    }
+
+    public Long getId() {
+        return id;
     }
 
     public UUID getPublicId() {
@@ -177,6 +270,10 @@ public class Deal {
 
     public int getRemainingQuantity() {
         return remainingQuantity;
+    }
+
+    public int getTotalQuantity() {
+        return totalQuantity;
     }
 
     public String getPrimaryImageUrl() {
@@ -213,5 +310,9 @@ public class Deal {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
     }
 }
