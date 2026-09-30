@@ -1,7 +1,9 @@
 package com.lootfast.backend.order.controller;
 
 import com.lootfast.backend.common.response.ApiResponse;
+import com.lootfast.backend.common.response.PagedResponse;
 import com.lootfast.backend.order.dto.*;
+import com.lootfast.backend.order.entity.OrderStatus;
 import com.lootfast.backend.order.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,6 +37,17 @@ public class OrderController {
     var result = service.reserve(jwt.getSubject(), key, request);
     return ResponseEntity.created(URI.create("/api/v1/orders/" + result.orderId()))
         .body(ApiResponse.success(result));
+  }
+
+  @GetMapping
+  @Operation(
+      summary = "Lịch sử đơn của người mua kèm số tiền tiết kiệm; lọc theo trạng thái và phân trang")
+  public ApiResponse<PagedResponse<OrderResponse>> list(
+      @AuthenticationPrincipal Jwt jwt,
+      @RequestParam(required = false) OrderStatus status,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return ApiResponse.success(service.list(jwt.getSubject(), status, page, size));
   }
 
   @GetMapping("/{orderId}")
