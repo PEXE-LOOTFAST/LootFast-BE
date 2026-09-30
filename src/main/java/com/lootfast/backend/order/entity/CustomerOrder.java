@@ -47,6 +47,14 @@ public class CustomerOrder {
   @Column(name = "unit_price", nullable = false, precision = 12, scale = 2, updatable = false)
   private BigDecimal unitPrice;
 
+  @Column(
+      name = "original_unit_price",
+      nullable = false,
+      precision = 12,
+      scale = 2,
+      updatable = false)
+  private BigDecimal originalUnitPrice;
+
   @Column(name = "total_amount", nullable = false, precision = 14, scale = 2, updatable = false)
   private BigDecimal totalAmount;
 
@@ -122,6 +130,7 @@ public class CustomerOrder {
     this.dealName = deal.getName();
     this.quantity = quantity;
     this.unitPrice = deal.getDiscountedPrice();
+    this.originalUnitPrice = deal.getOriginalPrice();
     this.totalAmount = unitPrice.multiply(BigDecimal.valueOf(quantity));
     this.pickupStart = deal.getPickupStart();
     this.pickupEnd = deal.getPickupEnd();
@@ -157,18 +166,24 @@ public class CustomerOrder {
     paymentStatus = PaymentStatus.REVIEW_REQUIRED;
   }
 
+  /**
+   * Cửa duy nhất để đổi trạng thái đơn. Chặn mọi bước nhảy không hợp lệ theo bảng {@link
+   * OrderStatus#canTransitionTo} và đóng dấu thời điểm chốt khi vào trạng thái cuối. Các check nghiệp
+   * vụ (giờ huỷ, quyền sở hữu…) nằm ở tầng service; đây là lớp bất biến cuối cùng.
+   */
+  private void transition(OrderStatus next, Instant now) {
+    if (!status.canTransitionTo(next))
+      throw new IllegalStateException("Cannot move order from " + status + " to " + next);
+    status = next;
+    if (next.isTerminal()) finalizedAt = now;
+  }
+
   public void cancel(Instant now) {
-    if (status != OrderStatus.RESERVED)
-      throw new IllegalStateException("Only reserved orders can be cancelled");
-    status = OrderStatus.CANCELLED;
-    finalizedAt = now;
+    transition(OrderStatus.CANCELLED, now);
   }
 
   public void markNoShow(Instant now) {
-    if (status != OrderStatus.RESERVED)
-      throw new IllegalStateException("Only reserved orders become no-show");
-    status = OrderStatus.NO_SHOW;
-    finalizedAt = now;
+    transition(OrderStatus.NO_SHOW, now);
   }
 
   public void changePaymentMethod(PaymentMethod method) {
@@ -205,6 +220,15 @@ public class CustomerOrder {
 
   public BigDecimal getUnitPrice() {
     return unitPrice;
+  }
+
+  public BigDecimal getOriginalUnitPrice() {
+    return originalUnitPrice;
+  }
+
+  /** Số tiền khách tiết kiệm được so với giá gốc: (giá gốc − giá đã giảm) × số lượng. */
+  public BigDecimal getSavings() {
+    return originalUnitPrice.subtract(unitPrice).multiply(BigDecimal.valueOf(quantity));
   }
 
   public BigDecimal getTotalAmount() {

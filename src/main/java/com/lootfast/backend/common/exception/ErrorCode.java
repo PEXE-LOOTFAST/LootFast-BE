@@ -95,6 +95,7 @@ public enum ErrorCode {
     // ---oder----
     ORDER_NOT_CANCELLABLE(HttpStatus.CONFLICT),
     ORDER_CANCEL_WINDOW_CLOSED(HttpStatus.CONFLICT),
+    NO_SHOW_RESTRICTED(HttpStatus.CONFLICT),
 
     // --- System ---
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);

@@ -3,6 +3,7 @@ package com.lootfast.backend.order.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lootfast.backend.common.exception.*;
+import com.lootfast.backend.common.response.PagedResponse;
 import com.lootfast.backend.deal.entity.*;
 import com.lootfast.backend.deal.repository.DealRepository;
 import com.lootfast.backend.merchant.repository.*;
@@ -14,11 +15,18 @@ import com.lootfast.backend.user.repository.UserRepository;
 import java.time.*;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class OrderService {
+  // BR-ORD-09: 3 no-show trong 30 ngày thì 14 ngày kế chỉ được đặt đơn trả trước (chặn tiền mặt).
+  private static final int NO_SHOW_THRESHOLD = 3;
+  private static final long NO_SHOW_WINDOW_SECONDS = 30L * 24 * 3600;
+  private static final long NO_SHOW_PENALTY_SECONDS = 14L * 24 * 3600;
+
   private final com.lootfast.backend.config.DatabaseLockTimeout lockTimeout;
   private final UserRepository users;
   private final DealRepository deals;
@@ -131,6 +139,10 @@ public class OrderService {
     if (orders.reservedQuantity(buyer.getId(), request.dealId()) + request.quantity() > 5)
       throw error(
           ErrorCode.RESERVED_QUANTITY_LIMIT, "At most 5 uncollected portions per deal are allowed");
+    if (request.paymentMethod() == PaymentMethod.CASH && isNoShowRestricted(buyer.getId(), now))
+      throw error(
+          ErrorCode.NO_SHOW_RESTRICTED,
+          "Too many recent no-shows; pay by bank transfer to reserve for now");
     if (deal.getRemainingQuantity() < request.quantity())
       throw error(ErrorCode.INSUFFICIENT_STOCK, "Not enough portions remain");
     CustomerOrder order =
@@ -200,11 +212,33 @@ public class OrderService {
   }
 
   @Transactional(readOnly = true)
+  public PagedResponse<OrderResponse> list(String subject, OrderStatus status, int page, int size) {
+    Long buyerId = userId(subject);
+    var pageable =
+        PageRequest.of(page, size, Sort.by("createdAt").descending().and(Sort.by("id").descending()));
+    var orderPage =
+        status == null
+            ? orders.findByBuyerId(buyerId, pageable)
+            : orders.findByBuyerIdAndStatus(buyerId, status, pageable);
+    return PagedResponse.from(orderPage.map(OrderResponse::from));
+  }
+
+  @Transactional(readOnly = true)
   public OrderResponse get(String subject, UUID orderId) {
     return OrderResponse.from(
         orders
             .findByPublicIdAndBuyerId(orderId, userId(subject))
             .orElseThrow(() -> error(ErrorCode.ORDER_NOT_FOUND, "Order was not found")));
+  }
+
+  /**
+   * True nếu người mua đang trong thời gian bị hạn chế no-show: có ít nhất {@code NO_SHOW_THRESHOLD}
+   * đơn NO_SHOW trong 30 ngày gần nhất và chưa qua 14 ngày kể từ lần no-show mới nhất.
+   */
+  private boolean isNoShowRestricted(Long buyerId, Instant now) {
+    var noShowTimes = orders.recentNoShowTimes(buyerId, now.minusSeconds(NO_SHOW_WINDOW_SECONDS));
+    return noShowTimes.size() >= NO_SHOW_THRESHOLD
+        && now.isBefore(noShowTimes.get(0).plusSeconds(NO_SHOW_PENALTY_SECONDS));
   }
 
   private void requireBuyer(User user) {
