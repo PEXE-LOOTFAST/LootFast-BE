@@ -113,7 +113,7 @@ class PublicStoreServiceIntegrationTests {
     }
 
     private void createDeal(String name, DealStatus status, int quantity) {
-        dealRepository.save(new Deal(
+        Deal deal = new Deal(
                 store,
                 name,
                 "MEAL",
@@ -126,8 +126,12 @@ class PublicStoreServiceIntegrationTests {
                 NOW.plusSeconds(7_200),
                 NOW.minusSeconds(3_600),
                 NOW.plusSeconds(7_200),
-                status
-        ));
+                status == DealStatus.HIDDEN ? DealStatus.ACTIVE : status
+        );
+        if (status == DealStatus.HIDDEN) {
+            deal.hide(NOW);
+        }
+        dealRepository.save(deal);
     }
 
     @TestConfiguration

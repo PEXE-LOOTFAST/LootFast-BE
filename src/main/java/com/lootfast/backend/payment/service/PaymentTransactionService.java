@@ -9,8 +9,12 @@ import com.lootfast.backend.order.entity.PaymentStatus;
 import com.lootfast.backend.order.repository.OrderRepository;
 import com.lootfast.backend.order.service.OrderService;
 import com.lootfast.backend.payment.dto.PaymentInstructions;
+import com.lootfast.backend.payment.entity.PaymentEvent;
+import com.lootfast.backend.payment.entity.PaymentEventType;
+import com.lootfast.backend.payment.repository.PaymentEventRepository;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,12 +24,18 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentTransactionService {
   private final com.lootfast.backend.config.DatabaseLockTimeout lockTimeout;
   private final OrderRepository orders;
+  private final PaymentEventRepository events;
+  private final Clock clock;
 
   public PaymentTransactionService(
       OrderRepository orders,
+      PaymentEventRepository events,
+      Clock clock,
       com.lootfast.backend.config.DatabaseLockTimeout lockTimeout) {
     this.lockTimeout = lockTimeout;
     this.orders = orders;
+    this.events = events;
+    this.clock = clock;
   }
 
   @Transactional(readOnly = true)
@@ -53,6 +63,33 @@ public class PaymentTransactionService {
           "No bank account was configured when this order was created");
     }
     order.changePaymentMethod(method);
+    return OrderResponse.from(order);
+  }
+
+  @Transactional(timeout = 5)
+  public OrderResponse reportBankTransfer(String subject, UUID orderId) {
+    lockTimeout.apply();
+    CustomerOrder order = owned(subject, orderId);
+    if (order.getPaymentMethod() != PaymentMethod.BANK_TRANSFER
+        || order.getStatus() != OrderStatus.RESERVED
+        || order.getPaymentStatus() == PaymentStatus.CONFIRMED) {
+      throw OrderService.error(
+          ErrorCode.PAYMENT_STATE_CONFLICT,
+          "Only an unpaid reserved bank transfer can be reported");
+    }
+    PaymentStatus previous = order.getPaymentStatus();
+    var now = clock.instant();
+    if (order.reportBankTransfer(now)) {
+      events.save(
+          new PaymentEvent(
+              order,
+              order.getBuyer(),
+              PaymentEventType.TRANSFER_REPORTED,
+              previous,
+              PaymentStatus.REVIEW_REQUIRED,
+              null,
+              now));
+    }
     return OrderResponse.from(order);
   }
 

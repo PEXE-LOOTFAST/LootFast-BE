@@ -5,7 +5,9 @@ import com.lootfast.backend.merchant.entity.MerchantProfile;
 import com.lootfast.backend.user.entity.User;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
 
 @Entity
@@ -16,9 +18,13 @@ import java.util.UUID;
       @UniqueConstraint(
           name = "uk_orders_key",
           columnNames = {"buyer_id", "reservation_key"}),
-      @UniqueConstraint(name = "uk_orders_reference", columnNames = "payment_reference")
+      @UniqueConstraint(name = "uk_orders_reference", columnNames = "payment_reference"),
+      @UniqueConstraint(name = "uk_orders_pickup_code", columnNames = "pickup_code")
     })
 public class CustomerOrder {
+  private static final SecureRandom PICKUP_CODE_RANDOM = new SecureRandom();
+  private static final char[] PICKUP_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ".toCharArray();
+
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -79,6 +85,9 @@ public class CustomerOrder {
   @Column(name = "payment_reference", nullable = false, length = 23, updatable = false)
   private String paymentReference;
 
+  @Column(name = "pickup_code", nullable = false, length = 9, updatable = false)
+  private String pickupCode;
+
   @Column(name = "reservation_key", nullable = false, updatable = false)
   private UUID reservationKey;
 
@@ -102,6 +111,16 @@ public class CustomerOrder {
 
   @Column(name = "bank_holder_name", length = 120, updatable = false)
   private String bankHolderName;
+
+  @Column(name = "payment_reported_at")
+  private Instant paymentReportedAt;
+
+  @Column(name = "payment_confirmed_at")
+  private Instant paymentConfirmedAt;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "payment_confirmed_by_user_id")
+  private User paymentConfirmedBy;
 
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt;
@@ -147,8 +166,17 @@ public class CustomerOrder {
                 .toString()
                 .replace("-", "")
                 .substring(0, 20)
-                .toUpperCase(java.util.Locale.ROOT);
+                .toUpperCase(Locale.ROOT);
+    this.pickupCode = generatePickupCode();
     this.creationResponse = "";
+  }
+
+  private static String generatePickupCode() {
+    StringBuilder value = new StringBuilder("LF-");
+    for (int index = 0; index < 6; index++) {
+      value.append(PICKUP_CODE_ALPHABET[PICKUP_CODE_RANDOM.nextInt(PICKUP_CODE_ALPHABET.length)]);
+    }
+    return value.toString();
   }
 
   public void snapshotBank(String bin, String name, String number, String holder) {
@@ -162,8 +190,53 @@ public class CustomerOrder {
     creationResponse = json;
   }
 
-  public void requirePaymentReview() {
+  public boolean reportBankTransfer(Instant now) {
+    if (paymentMethod != PaymentMethod.BANK_TRANSFER || status != OrderStatus.RESERVED) {
+      throw new IllegalStateException("Only reserved bank-transfer orders can be reported");
+    }
+    if (paymentStatus == PaymentStatus.CONFIRMED) {
+      throw new IllegalStateException("Confirmed payments cannot be reported again");
+    }
+    if (paymentStatus == PaymentStatus.REVIEW_REQUIRED) {
+      return false;
+    }
     paymentStatus = PaymentStatus.REVIEW_REQUIRED;
+    paymentReportedAt = now;
+    return true;
+  }
+
+  public boolean confirmBankTransfer(User actor, Instant now) {
+    if (paymentMethod != PaymentMethod.BANK_TRANSFER || status != OrderStatus.RESERVED) {
+      throw new IllegalStateException("Only reserved bank-transfer orders can be confirmed");
+    }
+    if (paymentStatus == PaymentStatus.CONFIRMED) {
+      return false;
+    }
+    paymentStatus = PaymentStatus.CONFIRMED;
+    paymentConfirmedAt = now;
+    paymentConfirmedBy = actor;
+    return true;
+  }
+
+  public void rejectBankTransfer() {
+    if (paymentMethod != PaymentMethod.BANK_TRANSFER
+        || status != OrderStatus.RESERVED
+        || paymentStatus != PaymentStatus.REVIEW_REQUIRED) {
+      throw new IllegalStateException("Only reported bank transfers can be rejected");
+    }
+    paymentStatus = PaymentStatus.UNPAID;
+    paymentReportedAt = null;
+  }
+
+  public void collectCash(User actor, Instant now) {
+    if (paymentMethod != PaymentMethod.CASH
+        || status != OrderStatus.RESERVED
+        || paymentStatus != PaymentStatus.UNPAID) {
+      throw new IllegalStateException("Cash can only be collected for an unpaid reserved order");
+    }
+    paymentStatus = PaymentStatus.CONFIRMED;
+    paymentConfirmedAt = now;
+    paymentConfirmedBy = actor;
   }
 
   /**
@@ -184,6 +257,10 @@ public class CustomerOrder {
 
   public void markNoShow(Instant now) {
     transition(OrderStatus.NO_SHOW, now);
+  }
+
+  public void complete(Instant now) {
+    transition(OrderStatus.COMPLETED, now);
   }
 
   public void changePaymentMethod(PaymentMethod method) {
@@ -259,6 +336,10 @@ public class CustomerOrder {
     return paymentReference;
   }
 
+  public String getPickupCode() {
+    return pickupCode;
+  }
+
   public Instant getFinalizedAt() {
     return finalizedAt;
   }
@@ -293,5 +374,17 @@ public class CustomerOrder {
 
   public String getBankHolderName() {
     return bankHolderName;
+  }
+
+  public Instant getPaymentReportedAt() {
+    return paymentReportedAt;
+  }
+
+  public Instant getPaymentConfirmedAt() {
+    return paymentConfirmedAt;
+  }
+
+  public User getPaymentConfirmedBy() {
+    return paymentConfirmedBy;
   }
 }
