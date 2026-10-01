@@ -107,7 +107,7 @@ public class PublicStoreService {
                         profile.getLatitude(),
                         profile.getLongitude()
                 ),
-                true,
+                profile.isVerified(),
                 new PublicStoreProfileResponse.RatingSummary(null, 0),
                 openingHours,
                 PagedResponse.from(deals)

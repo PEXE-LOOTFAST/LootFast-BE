@@ -12,6 +12,7 @@ import com.lootfast.backend.order.entity.*;
 import com.lootfast.backend.order.repository.OrderRepository;
 import com.lootfast.backend.user.entity.*;
 import com.lootfast.backend.user.repository.UserRepository;
+import java.math.BigDecimal;
 import java.time.*;
 import java.util.List;
 import java.util.UUID;
@@ -227,6 +228,15 @@ public class OrderService {
             ? orders.findByBuyerId(buyerId, pageable)
             : orders.findByBuyerIdAndStatus(buyerId, status, pageable);
     return PagedResponse.from(orderPage.map(OrderResponse::from));
+  }
+
+  @Transactional(readOnly = true)
+  public OrderImpactSummaryResponse impactSummary(String subject) {
+    var totals = orders.summarizeCompletedImpact(userId(subject));
+    return new OrderImpactSummaryResponse(
+        totals.getCompletedOrders(),
+        totals.getRescuedPortions() == null ? 0 : totals.getRescuedPortions(),
+        totals.getTotalSavings() == null ? BigDecimal.ZERO : totals.getTotalSavings());
   }
 
   @Transactional(readOnly = true)

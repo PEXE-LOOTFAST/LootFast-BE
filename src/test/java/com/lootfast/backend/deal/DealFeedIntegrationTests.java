@@ -206,6 +206,7 @@ class DealFeedIntegrationTests {
                 UserStatus.VERIFIED
         ));
         MerchantProfile profile = new MerchantProfile(merchantUser);
+        profile.markVerified(NOW);
         profile.updateStoreInformation(
                 name + " Store",
                 "Description",
@@ -264,6 +265,7 @@ class DealFeedIntegrationTests {
                 UserStatus.VERIFIED
         ));
         MerchantProfile profile = new MerchantProfile(merchantUser);
+        profile.markVerified(NOW);
         profile.updateStoreInformation(storeName, "Description", categoryCode, null, null);
         profile.updateLocation(
                 "1 Test Street",

@@ -8,6 +8,8 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
+import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -73,6 +75,37 @@ class BrevoEmailSenderTests {
                 .andRespond(withBadRequest());
 
         assertDoesNotThrow(() -> sender.sendPasswordResetOtp("user@example.com", "123456"));
+
+        server.verify();
+    }
+
+    @Test
+    void sendsMatchingDealEmailWithStableNotificationKeyAndEscapedContent() {
+        UUID notificationId = UUID.randomUUID();
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.to[0].email").value("buyer@example.com"))
+                .andExpect(jsonPath("$.subject").value("LootFast — Deal phù hợp dành cho bạn"))
+                .andExpect(jsonPath("$.headers.idempotencyKey").value(notificationId.toString()))
+                .andExpect(jsonPath("$.htmlContent").value(
+                        org.hamcrest.Matchers.containsString("Bread &amp; Soup")
+                ))
+                .andExpect(jsonPath("$.htmlContent").value(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("<script>"))
+                ))
+                .andRespond(withSuccess(
+                        "{\"messageId\":\"<matching-deal@brevo>\"}",
+                        MediaType.APPLICATION_JSON
+                ));
+
+        sender.sendMatchingDeal(
+                "buyer@example.com",
+                notificationId,
+                "Bread & Soup",
+                "<script>Store</script>",
+                BigDecimal.valueOf(100_000),
+                BigDecimal.valueOf(40_000)
+        );
 
         server.verify();
     }

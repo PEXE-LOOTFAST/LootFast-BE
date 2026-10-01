@@ -105,6 +105,9 @@ public enum ErrorCode {
     PICKUP_CONFIRMATION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE),
     NO_SHOW_RESTRICTED(HttpStatus.CONFLICT),
 
+    // --- Notifications ---
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND),
+
     // --- System ---
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 

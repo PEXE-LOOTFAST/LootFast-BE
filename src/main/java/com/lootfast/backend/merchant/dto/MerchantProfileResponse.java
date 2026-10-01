@@ -12,6 +12,8 @@ public record MerchantProfileResponse(
         String contactPhone,
         String logoUrl,
         String coverUrl,
+        boolean verified,
+        Instant verifiedAt,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -24,6 +26,8 @@ public record MerchantProfileResponse(
                 profile.getContactPhone(),
                 profile.getLogoUrl(),
                 profile.getCoverUrl(),
+                profile.isVerified(),
+                profile.getVerifiedAt(),
                 profile.getCreatedAt(),
                 profile.getUpdatedAt()
         );

@@ -3,6 +3,7 @@ package com.lootfast.backend.order.repository;
 import com.lootfast.backend.order.entity.*;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
 import org.springframework.data.domain.Page;
@@ -10,11 +11,30 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 
 public interface OrderRepository extends JpaRepository<CustomerOrder, Long> {
+  interface ImpactTotals {
+    Long getCompletedOrders();
+
+    Long getRescuedPortions();
+
+    BigDecimal getTotalSavings();
+  }
+
   Optional<CustomerOrder> findByBuyerIdAndReservationKey(Long buyerId, UUID key);
 
   long countByBuyerIdAndStatus(Long buyerId, OrderStatus status);
 
   boolean existsByMerchantIdAndStatus(Long merchantId, OrderStatus status);
+
+  @Query(
+      """
+      select count(o) as completedOrders,
+             sum(o.quantity) as rescuedPortions,
+             sum((o.originalUnitPrice - o.unitPrice) * o.quantity) as totalSavings
+      from CustomerOrder o
+      where o.buyer.id = :buyerId
+        and o.status = com.lootfast.backend.order.entity.OrderStatus.COMPLETED
+      """)
+  ImpactTotals summarizeCompletedImpact(Long buyerId);
 
   @Query(
       "select coalesce(sum(o.quantity),0) from CustomerOrder o where o.buyer.id=:buyerId and"

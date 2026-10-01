@@ -20,6 +20,7 @@ import org.hibernate.annotations.OnDeleteAction;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @DynamicUpdate
@@ -89,6 +90,9 @@ public class MerchantProfile {
     @Column(name = "cover_storage_key", length = 255)
     private String coverStorageKey;
 
+    @Column(name = "verified_at")
+    private Instant verifiedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -130,6 +134,13 @@ public class MerchantProfile {
         this.city = city;
         this.latitude = latitude;
         this.longitude = longitude;
+    }
+
+    public void markVerified(Instant approvedAt) {
+        Objects.requireNonNull(approvedAt, "approvedAt must not be null");
+        if (verifiedAt == null) {
+            verifiedAt = approvedAt;
+        }
     }
 
     @PrePersist
@@ -216,5 +227,13 @@ public class MerchantProfile {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public boolean isVerified() {
+        return verifiedAt != null;
+    }
+
+    public Instant getVerifiedAt() {
+        return verifiedAt;
     }
 }

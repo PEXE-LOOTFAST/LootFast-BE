@@ -30,6 +30,7 @@ import java.time.LocalTime;
 import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,6 +94,7 @@ class PublicStoreServiceIntegrationTests {
 
     @Test
     void publicProfileContainsOpeningHoursCurrentDealsAndEmptyRatingSummary() {
+        store.markVerified(NOW);
         PublicStoreProfileResponse response = publicStoreService.getStore(
                 merchant.getPublicId(),
                 10.7768,
@@ -110,6 +112,19 @@ class PublicStoreServiceIntegrationTests {
                 .compareTo(BigDecimal.ZERO) > 0);
         assertNull(response.rating().averageRating());
         assertEquals(0, response.rating().reviewCount());
+    }
+
+    @Test
+    void publicProfileDoesNotClaimUnapprovedStoreIsVerified() {
+        PublicStoreProfileResponse response = publicStoreService.getStore(
+                merchant.getPublicId(),
+                null,
+                null,
+                0,
+                20
+        );
+
+        assertFalse(response.verified());
     }
 
     private void createDeal(String name, DealStatus status, int quantity) {
