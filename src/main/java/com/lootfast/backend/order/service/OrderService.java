@@ -1,5 +1,8 @@
 package com.lootfast.backend.order.service;
 
+import com.lootfast.backend.notification.service.OrderNotificationService;
+import com.lootfast.backend.notification.entity.NotificationType;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lootfast.backend.common.exception.*;
@@ -36,6 +39,7 @@ public class OrderService {
   private final OrderRepository orders;
   private final ObjectMapper json;
   private final Clock clock;
+  private final OrderNotificationService notifications;
 
   public OrderService(
       UserRepository users,
@@ -45,7 +49,8 @@ public class OrderService {
       OrderRepository orders,
       ObjectMapper json,
       Clock clock,
-      com.lootfast.backend.config.DatabaseLockTimeout lockTimeout) {
+      com.lootfast.backend.config.DatabaseLockTimeout lockTimeout,
+      OrderNotificationService notifications) {
     this.lockTimeout = lockTimeout;
     this.users = users;
     this.deals = deals;
@@ -54,6 +59,7 @@ public class OrderService {
     this.orders = orders;
     this.json = json;
     this.clock = clock;
+    this.notifications = notifications;
   }
 
   public static Long userId(String subject) {
@@ -166,6 +172,7 @@ public class OrderService {
       throw new IllegalStateException("Cannot serialize reservation response");
     }
     orders.saveAndFlush(order);
+    notifications.notifyBoth(order, NotificationType.ORDER_RESERVED);
     return response;
   }
 
@@ -194,6 +201,7 @@ public class OrderService {
             .orElseThrow(() -> error(ErrorCode.DEAL_NOT_FOUND, "Deal was not found"));
     deal.restore(order.getQuantity(), now);
     order.cancel(now);
+    notifications.notifyBoth(order, NotificationType.ORDER_CANCELLED);
     return OrderResponse.from(order);
   }
 
@@ -216,6 +224,7 @@ public class OrderService {
             .orElseThrow(() -> error(ErrorCode.DEAL_NOT_FOUND, "Deal was not found"));
     deal.restore(order.getQuantity(), now);
     order.markNoShow(now);
+    notifications.notifyBoth(order, NotificationType.ORDER_NO_SHOW);
   }
 
   @Transactional(readOnly = true)

@@ -109,4 +109,15 @@ class BrevoEmailSenderTests {
 
         server.verify();
     }
+    @Test
+    void sendsOrderEmailWithEscapedContentAndStableKey() {
+        UUID id = UUID.randomUUID();
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andExpect(jsonPath("$.headers.idempotencyKey").value(id.toString()))
+                .andExpect(jsonPath("$.htmlContent").value(
+                        org.hamcrest.Matchers.containsString("&lt;script&gt;")))
+                .andRespond(withSuccess("{\"messageId\":\"order-message\"}", MediaType.APPLICATION_JSON));
+        sender.sendOrderNotification("buyer@example.com", id, "Order update", "<script>Meal</script>");
+        server.verify();
+    }
 }

@@ -19,6 +19,8 @@ import java.util.UUID;
 
 public interface UserNotificationRepository extends JpaRepository<UserNotification, Long> {
 
+    boolean existsByRecipientIdAndTypeAndOrderPublicIdAndOccurrenceKey(Long recipientId, NotificationType type, UUID orderId, UUID occurrenceKey);
+
     Page<UserNotification> findByRecipientId(Long recipientId, Pageable pageable);
 
     long countByRecipientIdAndReadAtIsNull(Long recipientId);

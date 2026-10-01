@@ -1,5 +1,8 @@
 package com.lootfast.backend.order.service;
 
+import com.lootfast.backend.notification.service.OrderNotificationService;
+import com.lootfast.backend.notification.entity.NotificationType;
+
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.common.response.PagedResponse;
@@ -34,6 +37,7 @@ public class MerchantOrderService {
   private final MerchantPickupConfirmationRateLimiter rateLimiter;
   private final com.lootfast.backend.config.DatabaseLockTimeout lockTimeout;
   private final Clock clock;
+  private final OrderNotificationService notifications;
 
   public MerchantOrderService(
       OrderRepository orders,
@@ -41,13 +45,15 @@ public class MerchantOrderService {
       MerchantProfileRepository merchants,
       MerchantPickupConfirmationRateLimiter rateLimiter,
       com.lootfast.backend.config.DatabaseLockTimeout lockTimeout,
-      Clock clock) {
+      Clock clock,
+      OrderNotificationService notifications) {
     this.orders = orders;
     this.paymentEvents = paymentEvents;
     this.merchants = merchants;
     this.rateLimiter = rateLimiter;
     this.lockTimeout = lockTimeout;
     this.clock = clock;
+    this.notifications = notifications;
   }
 
   @Transactional(readOnly = true)
@@ -94,6 +100,7 @@ public class MerchantOrderService {
     Instant now = clock.instant();
     if (order.getPaymentMethod() == PaymentMethod.CASH) {
       order.collectCash(order.getMerchant().getUser(), now);
+      notifications.notifyBoth(order, NotificationType.PAYMENT_CONFIRMED);
       paymentEvents.save(
           new PaymentEvent(
               order,
@@ -109,6 +116,7 @@ public class MerchantOrderService {
           "Bank transfer must be confirmed before pickup completion");
     }
     order.complete(now);
+    notifications.notifyBoth(order, NotificationType.ORDER_COMPLETED);
     return MerchantOrderResponse.from(order);
   }
 

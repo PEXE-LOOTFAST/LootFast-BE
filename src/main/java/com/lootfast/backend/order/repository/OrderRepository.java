@@ -11,6 +11,19 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 
 public interface OrderRepository extends JpaRepository<CustomerOrder, Long> {
+  @Query("""
+      select o.publicId from CustomerOrder o
+      left join NotificationPreference p on p.user.id = o.buyer.id
+      where o.status = com.lootfast.backend.order.entity.OrderStatus.RESERVED
+        and o.pickupStart > :now and o.pickupStart <= :until
+        and coalesce(p.pickupRemindersEnabled, true) = true
+        and not exists (select n.id from UserNotification n
+          where n.recipient.id = o.buyer.id and n.orderPublicId = o.publicId
+            and n.type = com.lootfast.backend.notification.entity.NotificationType.PICKUP_REMINDER)
+      order by o.pickupStart, o.id
+      """)
+  List<UUID> findPickupReminderCandidates(Instant now, Instant until, Pageable pageable);
+
   interface ImpactTotals {
     Long getCompletedOrders();
 

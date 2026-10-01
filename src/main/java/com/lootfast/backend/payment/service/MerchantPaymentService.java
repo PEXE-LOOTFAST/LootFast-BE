@@ -1,5 +1,8 @@
 package com.lootfast.backend.payment.service;
 
+import com.lootfast.backend.notification.service.OrderNotificationService;
+import com.lootfast.backend.notification.entity.NotificationType;
+
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.config.DatabaseLockTimeout;
@@ -30,18 +33,21 @@ public class MerchantPaymentService {
   private final PaymentEventRepository events;
   private final DatabaseLockTimeout lockTimeout;
   private final Clock clock;
+  private final OrderNotificationService notifications;
 
   public MerchantPaymentService(
       MerchantProfileRepository merchants,
       OrderRepository orders,
       PaymentEventRepository events,
       DatabaseLockTimeout lockTimeout,
-      Clock clock) {
+      Clock clock,
+      OrderNotificationService notifications) {
     this.merchants = merchants;
     this.orders = orders;
     this.events = events;
     this.lockTimeout = lockTimeout;
     this.clock = clock;
+    this.notifications = notifications;
   }
 
   @Transactional(timeout = 5)
@@ -62,6 +68,7 @@ public class MerchantPaymentService {
     PaymentStatus previous = order.getPaymentStatus();
     var now = clock.instant();
     order.confirmBankTransfer(merchant, now);
+    notifications.notifyBoth(order, NotificationType.PAYMENT_CONFIRMED);
     events.save(
         new PaymentEvent(
             order,
@@ -87,7 +94,11 @@ public class MerchantPaymentService {
     }
 
     var now = clock.instant();
+    var reportedAt = order.getPaymentReportedAt();
     order.rejectBankTransfer();
+    notifications.notifyBoth(order, NotificationType.PAYMENT_REJECTED,
+        UUID.nameUUIDFromBytes((order.getPublicId() + ":" + reportedAt)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     events.save(
         new PaymentEvent(
             order,

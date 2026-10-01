@@ -25,8 +25,8 @@ import java.util.UUID;
 @Table(
         name = "notifications",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_notifications_recipient_type_deal",
-                columnNames = {"recipient_user_id", "type", "deal_public_id"}
+                name = "uk_notifications_recipient_type_order",
+                columnNames = {"recipient_user_id", "type", "order_public_id", "occurrence_key"}
         ),
         indexes = @Index(
                 name = "idx_notifications_recipient_created",
@@ -57,6 +57,12 @@ public class UserNotification {
 
     @Column(name = "deal_public_id", nullable = false, updatable = false)
     private UUID dealPublicId;
+
+    @Column(name = "order_public_id", updatable = false)
+    private UUID orderPublicId;
+
+    @Column(name = "occurrence_key", updatable = false)
+    private UUID occurrenceKey;
 
     @Column(name = "store_public_id", nullable = false, updatable = false)
     private UUID storePublicId;
@@ -97,6 +103,21 @@ public class UserNotification {
         this.message = message;
         this.imageUrl = imageUrl;
     }
+
+    public UserNotification(User recipient, NotificationType type,
+            com.lootfast.backend.order.entity.CustomerOrder order, UUID occurrenceKey, String title, String message) {
+        this.recipient = recipient;
+        this.type = type;
+        this.orderPublicId = order.getPublicId();
+        this.occurrenceKey = occurrenceKey;
+        this.dealPublicId = order.getDeal().getPublicId();
+        this.storePublicId = order.getMerchant().getUser().getPublicId();
+        this.title = title;
+        this.message = message;
+        this.imageUrl = order.getDeal().getPrimaryImageUrl();
+    }
+
+    public UUID getOrderPublicId() { return orderPublicId; }
 
     @PrePersist
     private void beforeInsert() {

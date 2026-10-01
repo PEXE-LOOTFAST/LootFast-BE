@@ -1,5 +1,7 @@
 package com.lootfast.backend.notification.entity;
 
 public enum NotificationType {
-    MATCHING_DEAL
+    MATCHING_DEAL,
+    ORDER_RESERVED, TRANSFER_REPORTED, PAYMENT_CONFIRMED, PAYMENT_REJECTED,
+    ORDER_CANCELLED, ORDER_COMPLETED, ORDER_NO_SHOW, PICKUP_REMINDER
 }

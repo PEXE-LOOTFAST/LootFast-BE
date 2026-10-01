@@ -90,6 +90,18 @@ class BrevoEmailSender implements EmailSender {
         );
     }
 
+    @Override
+    @Async("emailExecutor")
+    public void sendOrderNotification(String to, UUID notificationId, String title, String message) {
+        send(new BrevoEmailRequest(
+                new Sender(properties.fromName(), properties.fromEmail()), List.of(new Recipient(to)),
+                "LootFast — " + title,
+                "<h2>" + HtmlUtils.htmlEscape(title) + "</h2><p>"
+                        + HtmlUtils.htmlEscape(message) + "</p><p>Mở LootFast để xem đơn hàng.</p>",
+                Map.of("idempotencyKey", notificationId.toString()), List.of("notification", "order")),
+                "order-notification");
+    }
+
     private void sendOtp(String to, String otp, String purpose, String subject, String heading) {
         BrevoEmailRequest request = new BrevoEmailRequest(
                 new Sender(properties.fromName(), properties.fromEmail()),
