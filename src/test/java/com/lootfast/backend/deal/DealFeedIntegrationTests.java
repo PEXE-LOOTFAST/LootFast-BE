@@ -222,7 +222,7 @@ class DealFeedIntegrationTests {
                 BigDecimal.valueOf(longitude)
         );
         merchantProfileRepository.save(profile);
-        return dealRepository.save(new Deal(
+        Deal deal = new Deal(
                 profile,
                 name,
                 "BAKERY",
@@ -235,8 +235,12 @@ class DealFeedIntegrationTests {
                 NOW.plusSeconds(7_200),
                 NOW.minusSeconds(3_600),
                 NOW.plusSeconds(7_200),
-                status
-        ));
+                status == DealStatus.HIDDEN ? DealStatus.ACTIVE : status
+        );
+        if (status == DealStatus.HIDDEN) {
+            deal.hide(NOW);
+        }
+        return dealRepository.save(deal);
     }
 
     private Deal createDeal(
@@ -270,7 +274,7 @@ class DealFeedIntegrationTests {
                 BigDecimal.valueOf(106.700950)
         );
         merchantProfileRepository.save(profile);
-        return dealRepository.save(new Deal(
+        Deal deal = new Deal(
                 profile,
                 name,
                 categoryCode,
@@ -283,8 +287,12 @@ class DealFeedIntegrationTests {
                 pickupEnd,
                 NOW.minusSeconds(3_600),
                 pickupEnd,
-                status
-        ));
+                status == DealStatus.HIDDEN ? DealStatus.ACTIVE : status
+        );
+        if (status == DealStatus.HIDDEN) {
+            deal.hide(NOW);
+        }
+        return dealRepository.save(deal);
     }
 
     @TestConfiguration

@@ -7,6 +7,7 @@ import com.lootfast.backend.common.storage.StoredImage;
 import com.lootfast.backend.merchant.entity.MerchantProfile;
 import com.lootfast.backend.merchant.repository.MerchantProfileRepository;
 import com.lootfast.backend.merchant.service.MerchantImageUploadRateLimiter;
+import com.lootfast.backend.order.service.MerchantPickupConfirmationRateLimiter;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserRole;
 import com.lootfast.backend.user.entity.UserStatus;
@@ -70,6 +71,9 @@ class AuthorizationIntegrationTests {
 
     @MockitoBean
     private MerchantImageUploadRateLimiter merchantImageUploadRateLimiter;
+
+    @MockitoBean
+    private MerchantPickupConfirmationRateLimiter merchantPickupConfirmationRateLimiter;
 
     @BeforeEach
     void setUp() {
@@ -173,6 +177,34 @@ class AuthorizationIntegrationTests {
 
         String buyerToken = signupAndSignin();
         mockMvc.perform(get("/api/v1/merchants/me/deals")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + buyerToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void merchantOrderManagementRequiresMerchantAuthentication() throws Exception {
+        String query = "?pickupFrom=2030-01-01T00:00:00Z&pickupTo=2030-01-02T00:00:00Z";
+
+        mockMvc.perform(get("/api/v1/merchants/me/orders" + query))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        String buyerToken = signupAndSignin();
+        mockMvc.perform(get("/api/v1/merchants/me/orders" + query)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + buyerToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post(
+                        "/api/v1/merchants/me/orders/{orderId}/payment-confirmation",
+                        UUID.randomUUID()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        mockMvc.perform(post(
+                        "/api/v1/merchants/me/orders/{orderId}/payment-confirmation",
+                        UUID.randomUUID())
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + buyerToken))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error.code").value("ACCESS_DENIED"));

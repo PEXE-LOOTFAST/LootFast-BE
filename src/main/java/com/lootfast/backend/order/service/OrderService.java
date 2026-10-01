@@ -92,7 +92,9 @@ public class OrderService {
       if (!clock.instant().isBefore(original.getReplayUntil()))
         throw error(ErrorCode.IDEMPOTENCY_KEY_EXPIRED, "Use a new key after 24 hours");
       try {
-        return json.readValue(original.getCreationResponse(), OrderResponse.class);
+        OrderResponse stored = json.readValue(original.getCreationResponse(), OrderResponse.class);
+        // Orders created immediately before V21 have an old serialized response without pickup data.
+        return stored.pickupCode() == null ? OrderResponse.from(original) : stored;
       } catch (JsonProcessingException e) {
         throw new IllegalStateException("Stored reservation response is invalid");
       }
@@ -177,6 +179,10 @@ public class OrderService {
       throw error(ErrorCode.ORDER_NOT_FOUND, "Order was not found");
     if (order.getStatus() != OrderStatus.RESERVED)
       throw error(ErrorCode.ORDER_NOT_CANCELLABLE, "Order can no longer be cancelled");
+    if (order.getPaymentStatus() != PaymentStatus.UNPAID)
+      throw error(
+          ErrorCode.PAYMENT_STATE_CONFLICT,
+          "Reported or confirmed payments require merchant support before cancellation");
     Instant now = clock.instant();
     if (!now.isBefore(order.getPickupStart().minusSeconds(1800)))
       throw error(

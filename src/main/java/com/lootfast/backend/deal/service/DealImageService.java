@@ -216,7 +216,7 @@ public class DealImageService {
             reorderSequentially(remaining);
             deal.updatePrimaryImage(remaining.isEmpty() ? null : remaining.getFirst().getImageUrl());
             if (remaining.isEmpty()) {
-                deal.hide();
+                deal.hide(clock.instant());
             }
             imageRepository.flush();
             dealRepository.flush();

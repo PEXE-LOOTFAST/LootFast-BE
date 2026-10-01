@@ -65,10 +65,10 @@ class FlywayPostgresMigrationIntegrationTests {
                 .load()
                 .migrate();
 
-        // V12-V20, including merchant bank accounts, order records, MoMo removal,
+        // V12-V23, including merchant bank accounts, order records, MoMo removal,
         // merchant deal management, the order finalized_at column, and the order
-        // original_unit_price snapshot, apply on V11.
-        assertEquals(9, result.migrationsExecuted);
+        // price/pickup snapshots, deal lifecycle and payment audit, apply on V11.
+        assertEquals(12, result.migrationsExecuted);
         try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
              var statement = connection.prepareStatement("""
                      select
@@ -80,7 +80,9 @@ class FlywayPostgresMigrationIntegrationTests {
                                    'external_auth_identities',
                                    'user_consents',
                                    'deals',
-                                   'user_favorites'
+                                   'user_favorites',
+                                   'deal_templates',
+                                   'order_payment_events'
                                )
                          ) as feature_table_count,
                          (
@@ -118,18 +120,60 @@ class FlywayPostgresMigrationIntegrationTests {
                              join deals on deals.id = images.deal_id
                              where deals.name = 'Bánh mì đặc biệt'
                                and images.status = 'ACTIVE'
-                         ) as migrated_image_count
+                         ) as migrated_image_count,
+                         (
+                             select count(*)
+                             from information_schema.columns
+                             where table_schema = 'public'
+                               and table_name = 'customer_orders'
+                               and column_name = 'pickup_code'
+                               and is_nullable = 'NO'
+                         ) as pickup_code_column_count,
+                         (
+                             select count(*)
+                             from pg_indexes
+                             where schemaname = 'public'
+                               and tablename = 'customer_orders'
+                               and indexname = 'idx_orders_merchant_pickup_start'
+                         ) as merchant_pickup_index_count,
+                         (
+                             select count(*)
+                             from information_schema.columns
+                             where table_schema = 'public'
+                               and table_name = 'deals'
+                               and column_name in (
+                                   'hidden_at',
+                                   'removed_at',
+                                   'removed_by_user_id',
+                                   'removal_reason'
+                               )
+                         ) as deal_lifecycle_column_count,
+                         (
+                             select count(*)
+                             from information_schema.columns
+                             where table_schema = 'public'
+                               and table_name = 'customer_orders'
+                               and column_name in (
+                                   'payment_reported_at',
+                                   'payment_confirmed_at',
+                                   'payment_confirmed_by_user_id'
+                               )
+                         ) as payment_audit_column_count
                      """)) {
             statement.setLong(1, existingMerchant.profileId());
             try (var rows = statement.executeQuery()) {
                 assertTrue(rows.next());
-                assertEquals(4, rows.getInt(1));
+                assertEquals(6, rows.getInt(1));
                 assertEquals(2, rows.getInt(2));
                 assertEquals(0, rows.getInt(3));
                 assertEquals("banh mi dac biet", rows.getString(4));
                 assertEquals("bep viet", rows.getString(5));
                 assertEquals(3, rows.getInt(6));
                 assertEquals(1, rows.getInt(7));
+                assertEquals(1, rows.getInt(8));
+                assertEquals(1, rows.getInt(9));
+                assertEquals(4, rows.getInt(10));
+                assertEquals(3, rows.getInt(11));
             }
         }
     }

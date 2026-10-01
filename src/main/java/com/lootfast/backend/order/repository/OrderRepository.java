@@ -26,6 +26,24 @@ public interface OrderRepository extends JpaRepository<CustomerOrder, Long> {
   Optional<CustomerOrder> findByPublicIdAndBuyerId(UUID publicId, Long buyerId);
 
   @EntityGraph(attributePaths = {"deal", "merchant", "merchant.user", "buyer"})
+  @Query(
+      "select o from CustomerOrder o where o.merchant.user.id=:merchantUserId"
+          + " and o.pickupStart>=:pickupFrom and o.pickupStart<:pickupTo")
+  Page<CustomerOrder> findMerchantPickupOrders(
+      Long merchantUserId, Instant pickupFrom, Instant pickupTo, Pageable pageable);
+
+  @EntityGraph(attributePaths = {"deal", "merchant", "merchant.user", "buyer"})
+  @Query(
+      "select o from CustomerOrder o where o.merchant.user.id=:merchantUserId"
+          + " and o.pickupStart>=:pickupFrom and o.pickupStart<:pickupTo and o.status=:status")
+  Page<CustomerOrder> findMerchantPickupOrdersByStatus(
+      Long merchantUserId,
+      Instant pickupFrom,
+      Instant pickupTo,
+      OrderStatus status,
+      Pageable pageable);
+
+  @EntityGraph(attributePaths = {"deal", "merchant", "merchant.user", "buyer"})
   Page<CustomerOrder> findByBuyerId(Long buyerId, Pageable pageable);
 
   @EntityGraph(attributePaths = {"deal", "merchant", "merchant.user", "buyer"})
@@ -35,6 +53,15 @@ public interface OrderRepository extends JpaRepository<CustomerOrder, Long> {
   @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
   @Query("select o from CustomerOrder o where o.publicId=:publicId")
   Optional<CustomerOrder> findForUpdate(UUID publicId);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
+  @Query(
+      "select o from CustomerOrder o join fetch o.deal join fetch o.merchant m"
+          + " join fetch m.user join fetch o.buyer where m.user.id=:merchantUserId"
+          + " and o.pickupCode=:pickupCode")
+  Optional<CustomerOrder> findMerchantOrderByPickupCodeForUpdate(
+      Long merchantUserId, String pickupCode);
 
   @Query(
       "select o.publicId from CustomerOrder o where"

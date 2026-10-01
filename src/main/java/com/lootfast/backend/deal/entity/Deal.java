@@ -2,6 +2,7 @@ package com.lootfast.backend.deal.entity;
 
 import com.lootfast.backend.common.text.SearchNormalizer;
 import com.lootfast.backend.merchant.entity.MerchantProfile;
+import com.lootfast.backend.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -101,6 +102,19 @@ public class Deal {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Column(name = "hidden_at")
+    private Instant hiddenAt;
+
+    @Column(name = "removed_at")
+    private Instant removedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "removed_by_user_id")
+    private User removedBy;
+
+    @Column(name = "removal_reason", length = 500)
+    private String removalReason;
 
     protected Deal() {
     }
@@ -209,10 +223,34 @@ public class Deal {
         this.primaryImageUrl = primaryImageUrl;
     }
 
-    public void hide() {
-        if (status == DealStatus.ACTIVE || status == DealStatus.SOLD_OUT) {
-            status = DealStatus.HIDDEN;
+    public void hide(Instant now) {
+        if (status == DealStatus.HIDDEN) {
+            return;
         }
+        if (status != DealStatus.ACTIVE && status != DealStatus.SOLD_OUT) {
+            throw new IllegalStateException("Only visible deals can be hidden");
+        }
+        status = DealStatus.HIDDEN;
+        hiddenAt = now;
+    }
+
+    public void restoreVisibility() {
+        if (status != DealStatus.HIDDEN) {
+            throw new IllegalStateException("Only hidden deals can be restored");
+        }
+        status = remainingQuantity == 0 ? DealStatus.SOLD_OUT : DealStatus.ACTIVE;
+        hiddenAt = null;
+    }
+
+    public void remove(User actor, String reason, Instant now) {
+        if (status == DealStatus.REMOVED) {
+            return;
+        }
+        status = DealStatus.REMOVED;
+        hiddenAt = null;
+        removedAt = now;
+        removedBy = actor;
+        removalReason = reason;
     }
 
     public void changeTotalQuantity(int newTotalQuantity, Instant now) {
@@ -314,5 +352,21 @@ public class Deal {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getHiddenAt() {
+        return hiddenAt;
+    }
+
+    public Instant getRemovedAt() {
+        return removedAt;
+    }
+
+    public User getRemovedBy() {
+        return removedBy;
+    }
+
+    public String getRemovalReason() {
+        return removalReason;
     }
 }

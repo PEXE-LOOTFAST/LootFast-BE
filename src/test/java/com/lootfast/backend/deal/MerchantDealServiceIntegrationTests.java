@@ -5,14 +5,19 @@ import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.common.storage.ImageStorage;
 import com.lootfast.backend.common.storage.StoredImage;
 import com.lootfast.backend.deal.dto.CreateMerchantDealRequest;
+import com.lootfast.backend.deal.dto.DealTemplateResponse;
 import com.lootfast.backend.deal.dto.MerchantDealResponse;
+import com.lootfast.backend.deal.dto.RemoveDealRequest;
+import com.lootfast.backend.deal.dto.ReuseDealTemplateRequest;
 import com.lootfast.backend.deal.dto.UpdateDealQuantityRequest;
 import com.lootfast.backend.deal.entity.Deal;
 import com.lootfast.backend.deal.entity.DealStatus;
 import com.lootfast.backend.deal.repository.DealImageRepository;
 import com.lootfast.backend.deal.repository.DealRepository;
+import com.lootfast.backend.deal.repository.DealTemplateRepository;
 import com.lootfast.backend.deal.service.DealImageService;
 import com.lootfast.backend.deal.service.MerchantDealService;
+import com.lootfast.backend.deal.service.DealTemplateService;
 import com.lootfast.backend.merchant.application.entity.MerchantApplication;
 import com.lootfast.backend.merchant.application.repository.MerchantApplicationRepository;
 import com.lootfast.backend.merchant.entity.MerchantOpeningHour;
@@ -21,6 +26,9 @@ import com.lootfast.backend.merchant.repository.MerchantOpeningHourRepository;
 import com.lootfast.backend.merchant.repository.MerchantProfileRepository;
 import com.lootfast.backend.merchant.service.MerchantImageUploadRateLimiter;
 import com.lootfast.backend.order.repository.OrderRepository;
+import com.lootfast.backend.order.entity.CustomerOrder;
+import com.lootfast.backend.order.entity.OrderStatus;
+import com.lootfast.backend.order.entity.PaymentMethod;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserRole;
 import com.lootfast.backend.user.entity.UserStatus;
@@ -44,6 +52,8 @@ import java.time.ZoneId;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,6 +69,7 @@ class MerchantDealServiceIntegrationTests {
     private static final Instant PICKUP_END = Instant.parse("2030-01-02T10:00:00Z");
 
     @Autowired private MerchantDealService dealService;
+    @Autowired private DealTemplateService templateService;
     @Autowired private DealImageService imageService;
     @Autowired private UserRepository userRepository;
     @Autowired private MerchantProfileRepository merchantRepository;
@@ -66,6 +77,7 @@ class MerchantDealServiceIntegrationTests {
     @Autowired private MerchantApplicationRepository applicationRepository;
     @Autowired private DealRepository dealRepository;
     @Autowired private DealImageRepository imageRepository;
+    @Autowired private DealTemplateRepository templateRepository;
     @Autowired private OrderRepository orderRepository;
 
     @MockitoBean private ImageStorage imageStorage;
@@ -79,6 +91,7 @@ class MerchantDealServiceIntegrationTests {
     void setUp() {
         when(clock.instant()).thenReturn(NOW);
         orderRepository.deleteAll();
+        templateRepository.deleteAll();
         imageRepository.deleteAll();
         dealRepository.deleteAll();
         openingHourRepository.deleteAll();
@@ -269,6 +282,90 @@ class MerchantDealServiceIntegrationTests {
         assertEquals(DealStatus.HIDDEN, moderated.status());
         assertEquals(0, moderated.images().size());
         assertNull(moderated.primaryImageUrl());
+    }
+
+    @Test
+    void merchantCanSaveAndReuseDealTemplateAsIndependentDraft() {
+        MerchantDealResponse source = dealService.create(subject(), validRequest("Reusable bread"));
+
+        DealTemplateResponse template = templateService.save(subject(), source.dealId());
+        MerchantDealResponse reused = templateService.reuse(
+                subject(),
+                template.templateId(),
+                new ReuseDealTemplateRequest(
+                        7,
+                        Instant.parse("2030-01-03T01:00:00Z"),
+                        Instant.parse("2030-01-03T08:00:00Z"),
+                        Instant.parse("2030-01-03T09:00:00Z"),
+                        Instant.parse("2030-01-03T10:00:00Z")
+                )
+        );
+
+        assertNotEquals(source.dealId(), reused.dealId());
+        assertEquals(DealStatus.DRAFT, reused.status());
+        assertEquals(source.name(), reused.name());
+        assertEquals(source.originalPrice(), reused.originalPrice());
+        assertEquals(source.discountedPrice(), reused.discountedPrice());
+        assertEquals(7, reused.totalQuantity());
+        assertEquals(0, reused.images().size());
+        assertEquals(1, templateService.list(subject(), 0, 20).totalElements());
+
+        templateService.delete(subject(), template.templateId());
+        assertEquals(0, templateService.list(subject(), 0, 20).totalElements());
+    }
+
+    @Test
+    void hidingRestoringAndRemovingDealPreservesExistingOrder() throws Exception {
+        MerchantDealResponse draft = createWithImage(validRequest("Reserved bread"));
+        MerchantDealResponse published = dealService.publish(subject(), draft.dealId());
+        Deal deal = dealRepository.findByPublicId(published.dealId()).orElseThrow();
+        deal.reserve(2);
+        dealRepository.saveAndFlush(deal);
+
+        User buyer = userRepository.save(new User(
+                "Buyer",
+                "Customer",
+                "deal-buyer@lootfast.local",
+                "933333333",
+                "encoded",
+                UserRole.BUYER,
+                UserStatus.VERIFIED
+        ));
+        CustomerOrder order = orderRepository.saveAndFlush(new CustomerOrder(
+                buyer,
+                deal,
+                2,
+                PaymentMethod.CASH,
+                UUID.randomUUID(),
+                "deal-lifecycle-test",
+                NOW
+        ));
+
+        MerchantDealResponse hidden = dealService.hide(subject(), published.dealId());
+        assertEquals(DealStatus.HIDDEN, hidden.status());
+        assertEquals(NOW, hidden.hiddenAt());
+        assertEquals(OrderStatus.RESERVED, orderRepository.findById(order.getId()).orElseThrow().getStatus());
+
+        MerchantDealResponse restored = dealService.restore(subject(), published.dealId());
+        assertEquals(DealStatus.ACTIVE, restored.status());
+        assertNull(restored.hiddenAt());
+
+        MerchantDealResponse removed = dealService.remove(
+                subject(),
+                published.dealId(),
+                new RemoveDealRequest("Sold out unexpectedly")
+        );
+        assertEquals(DealStatus.REMOVED, removed.status());
+        assertEquals(NOW, removed.removedAt());
+        assertEquals("Sold out unexpectedly", removed.removalReason());
+        assertNotNull(dealRepository.findByPublicId(published.dealId()).orElseThrow());
+        assertEquals(OrderStatus.RESERVED, orderRepository.findById(order.getId()).orElseThrow().getStatus());
+
+        ApiException restoreRemoved = assertThrows(
+                ApiException.class,
+                () -> dealService.restore(subject(), published.dealId())
+        );
+        assertEquals(ErrorCode.DEAL_NOT_RESTORABLE, restoreRemoved.getErrorCode());
     }
 
     private MerchantDealResponse createWithImage(CreateMerchantDealRequest request) throws Exception {
