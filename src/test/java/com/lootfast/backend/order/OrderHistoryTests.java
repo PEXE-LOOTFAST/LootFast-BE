@@ -11,6 +11,7 @@ import com.lootfast.backend.merchant.entity.MerchantProfile;
 import com.lootfast.backend.merchant.repository.MerchantProfileRepository;
 import com.lootfast.backend.order.dto.CreateOrderRequest;
 import com.lootfast.backend.order.dto.OrderResponse;
+import com.lootfast.backend.order.dto.OrderImpactSummaryResponse;
 import com.lootfast.backend.order.entity.OrderStatus;
 import com.lootfast.backend.order.entity.PaymentMethod;
 import com.lootfast.backend.order.repository.OrderRepository;
@@ -119,11 +120,54 @@ class OrderHistoryTests {
     assertEquals(1, secondPage.items().size());
   }
 
+  @Test
+  void impactSummaryCountsOnlyCompletedOrders() {
+    Deal deal = activeDeal(10); // each rescued portion saves 50k
+    complete(reserve(deal, 2));
+    complete(reserve(deal, 1));
+    UUID cancelled = reserve(deal, 1).orderId();
+    service.cancel(buyer.getId().toString(), cancelled);
+    reserve(deal, 1); // still reserved
+
+    User anotherBuyer = buyer("Buyer", "Two");
+    OrderResponse anotherOrder =
+        service.reserve(
+            anotherBuyer.getId().toString(),
+            UUID.randomUUID(),
+            new CreateOrderRequest(deal.getPublicId(), 1, PaymentMethod.CASH));
+    complete(anotherBuyer, anotherOrder);
+
+    OrderImpactSummaryResponse summary = service.impactSummary(buyer.getId().toString());
+
+    assertEquals(2, summary.completedOrders());
+    assertEquals(3, summary.rescuedPortions());
+    assertEquals(0, BigDecimal.valueOf(150_000).compareTo(summary.totalSavings()));
+  }
+
+  @Test
+  void impactSummaryReturnsZerosWhenBuyerHasNoCompletedOrders() {
+    OrderImpactSummaryResponse summary = service.impactSummary(buyer.getId().toString());
+
+    assertEquals(0, summary.completedOrders());
+    assertEquals(0, summary.rescuedPortions());
+    assertEquals(0, BigDecimal.ZERO.compareTo(summary.totalSavings()));
+  }
+
   private OrderResponse reserve(Deal deal, int quantity) {
     return service.reserve(
         buyer.getId().toString(),
         UUID.randomUUID(),
         new CreateOrderRequest(deal.getPublicId(), quantity, PaymentMethod.CASH));
+  }
+
+  private void complete(OrderResponse response) {
+    complete(buyer, response);
+  }
+
+  private void complete(User owner, OrderResponse response) {
+    var order = orders.findByPublicIdAndBuyerId(response.orderId(), owner.getId()).orElseThrow();
+    order.collectCash(merchant.getUser(), NOW);
+    order.complete(NOW);
   }
 
   private User buyer(String first, String last) {

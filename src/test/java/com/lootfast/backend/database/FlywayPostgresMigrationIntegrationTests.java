@@ -65,10 +65,11 @@ class FlywayPostgresMigrationIntegrationTests {
                 .load()
                 .migrate();
 
-        // V12-V23, including merchant bank accounts, order records, MoMo removal,
+        // V12-V27, including merchant bank accounts, order records, MoMo removal,
         // merchant deal management, the order finalized_at column, and the order
-        // price/pickup snapshots, deal lifecycle and payment audit, apply on V11.
-        assertEquals(12, result.migrationsExecuted);
+        // price/pickup snapshots, deal lifecycle, payment audit, verification badge,
+        // notification preferences and matching-deal notifications, apply on V11.
+        assertEquals(16, result.migrationsExecuted);
         try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
              var statement = connection.prepareStatement("""
                      select
@@ -82,7 +83,9 @@ class FlywayPostgresMigrationIntegrationTests {
                                    'deals',
                                    'user_favorites',
                                    'deal_templates',
-                                   'order_payment_events'
+                                   'order_payment_events',
+                                   'notification_preferences',
+                                   'notifications'
                                )
                          ) as feature_table_count,
                          (
@@ -158,12 +161,19 @@ class FlywayPostgresMigrationIntegrationTests {
                                    'payment_confirmed_at',
                                    'payment_confirmed_by_user_id'
                                )
-                         ) as payment_audit_column_count
+                         ) as payment_audit_column_count,
+                         (
+                             select count(*)
+                             from merchant_profiles
+                             where id = ?
+                               and verified_at is not null
+                         ) as verified_profile_count
                      """)) {
             statement.setLong(1, existingMerchant.profileId());
+            statement.setLong(2, existingMerchant.profileId());
             try (var rows = statement.executeQuery()) {
                 assertTrue(rows.next());
-                assertEquals(6, rows.getInt(1));
+                assertEquals(8, rows.getInt(1));
                 assertEquals(2, rows.getInt(2));
                 assertEquals(0, rows.getInt(3));
                 assertEquals("banh mi dac biet", rows.getString(4));
@@ -174,6 +184,7 @@ class FlywayPostgresMigrationIntegrationTests {
                 assertEquals(1, rows.getInt(9));
                 assertEquals(4, rows.getInt(10));
                 assertEquals(3, rows.getInt(11));
+                assertEquals(1, rows.getInt(12));
             }
         }
     }
@@ -236,6 +247,29 @@ class FlywayPostgresMigrationIntegrationTests {
                 assertTrue(rows.next());
                 profileId = rows.getLong(1);
             }
+        }
+
+        try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
+             var statement = connection.prepareStatement("""
+                     insert into merchant_applications (
+                         public_id,
+                         user_id,
+                         business_license_number,
+                         license_storage_key,
+                         license_format,
+                         submission_id,
+                         status,
+                         submitted_at,
+                         reviewed_at,
+                         created_at,
+                         updated_at
+                     ) values (?, ?, '03123456789012', 'license-key', 'png', ?,
+                               'APPROVED', now(), now(), now(), now())
+                     """)) {
+            statement.setObject(1, UUID.randomUUID());
+            statement.setLong(2, userId);
+            statement.setObject(3, UUID.randomUUID());
+            assertEquals(1, statement.executeUpdate());
         }
         return new ExistingMerchant(userId, profileId);
     }

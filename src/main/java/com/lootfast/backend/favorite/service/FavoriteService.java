@@ -169,7 +169,7 @@ public class FavoriteService {
                         store.getWard(),
                         store.getDistrict(),
                         store.getCity(),
-                        true
+                        store.isVerified()
                 )
         );
     }

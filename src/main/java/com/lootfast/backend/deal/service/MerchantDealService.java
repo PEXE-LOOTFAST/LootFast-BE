@@ -17,6 +17,7 @@ import com.lootfast.backend.merchant.entity.MerchantOpeningHour;
 import com.lootfast.backend.merchant.entity.MerchantProfile;
 import com.lootfast.backend.merchant.repository.MerchantOpeningHourRepository;
 import com.lootfast.backend.merchant.repository.MerchantProfileRepository;
+import com.lootfast.backend.notification.service.MatchingDealNotificationService;
 import com.lootfast.backend.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -55,6 +56,7 @@ public class MerchantDealService {
     private final MerchantOpeningHourRepository openingHourRepository;
     private final DealRepository dealRepository;
     private final DealImageRepository imageRepository;
+    private final MatchingDealNotificationService matchingDealNotificationService;
     private final Clock clock;
 
     public MerchantDealService(
@@ -63,6 +65,7 @@ public class MerchantDealService {
             MerchantOpeningHourRepository openingHourRepository,
             DealRepository dealRepository,
             DealImageRepository imageRepository,
+            MatchingDealNotificationService matchingDealNotificationService,
             Clock clock
     ) {
         this.access = access;
@@ -70,6 +73,7 @@ public class MerchantDealService {
         this.openingHourRepository = openingHourRepository;
         this.dealRepository = dealRepository;
         this.imageRepository = imageRepository;
+        this.matchingDealNotificationService = matchingDealNotificationService;
         this.clock = clock;
     }
 
@@ -145,6 +149,7 @@ public class MerchantDealService {
         List<DealImage> images = requireVisibleDealRules(merchant, deal);
         deal.publish(images.getFirst().getImageUrl());
         dealRepository.flush();
+        matchingDealNotificationService.createForPublishedDeal(deal);
         return MerchantDealResponse.from(deal, images);
     }
 

@@ -3,6 +3,8 @@ package com.lootfast.backend.user.service;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.dto.CurrentUserResponse;
+import com.lootfast.backend.user.dto.DiscoveryPreferencesResponse;
+import com.lootfast.backend.user.dto.UpdateDiscoveryPreferencesRequest;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserProfile;
 import com.lootfast.backend.user.repository.UserProfileRepository;
@@ -50,6 +52,21 @@ public class CurrentUserService {
                         : profile.getFavoriteCategories(),
                 user.getCreatedAt()
         );
+    }
+
+    @Transactional(timeout = 5)
+    public DiscoveryPreferencesResponse updateDiscoveryPreferences(
+            String subject,
+            UpdateDiscoveryPreferencesRequest request
+    ) {
+        Long userId = parseUserId(subject);
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND,
+                        "Authenticated user is no longer available"));
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+                .orElseGet(() -> new UserProfile(user, defaultDisplayName(user)));
+        profile.updateDiscoveryPreferences(request.pickupArea(), request.favoriteCategories());
+        return DiscoveryPreferencesResponse.from(userProfileRepository.save(profile));
     }
 
     private String defaultDisplayName(User user) {

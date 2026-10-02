@@ -1,5 +1,8 @@
 package com.lootfast.backend.payment.service;
 
+import com.lootfast.backend.notification.service.OrderNotificationService;
+import com.lootfast.backend.notification.entity.NotificationType;
+
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.order.dto.OrderResponse;
 import com.lootfast.backend.order.entity.CustomerOrder;
@@ -26,16 +29,19 @@ public class PaymentTransactionService {
   private final OrderRepository orders;
   private final PaymentEventRepository events;
   private final Clock clock;
+  private final OrderNotificationService notifications;
 
   public PaymentTransactionService(
       OrderRepository orders,
       PaymentEventRepository events,
       Clock clock,
-      com.lootfast.backend.config.DatabaseLockTimeout lockTimeout) {
+      com.lootfast.backend.config.DatabaseLockTimeout lockTimeout,
+      OrderNotificationService notifications) {
     this.lockTimeout = lockTimeout;
     this.orders = orders;
     this.events = events;
     this.clock = clock;
+    this.notifications = notifications;
   }
 
   @Transactional(readOnly = true)
@@ -80,6 +86,8 @@ public class PaymentTransactionService {
     PaymentStatus previous = order.getPaymentStatus();
     var now = clock.instant();
     if (order.reportBankTransfer(now)) {
+      notifications.notifyBoth(order, NotificationType.TRANSFER_REPORTED,
+          UUID.nameUUIDFromBytes((order.getPublicId() + ":" + now).getBytes(StandardCharsets.UTF_8)));
       events.save(
           new PaymentEvent(
               order,

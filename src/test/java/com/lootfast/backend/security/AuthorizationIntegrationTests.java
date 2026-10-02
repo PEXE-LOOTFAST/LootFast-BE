@@ -8,6 +8,9 @@ import com.lootfast.backend.merchant.entity.MerchantProfile;
 import com.lootfast.backend.merchant.repository.MerchantProfileRepository;
 import com.lootfast.backend.merchant.service.MerchantImageUploadRateLimiter;
 import com.lootfast.backend.order.service.MerchantPickupConfirmationRateLimiter;
+import com.lootfast.backend.notification.entity.DealMatchReason;
+import com.lootfast.backend.notification.entity.UserNotification;
+import com.lootfast.backend.notification.repository.UserNotificationRepository;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserRole;
 import com.lootfast.backend.user.entity.UserStatus;
@@ -36,6 +39,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -54,6 +58,9 @@ class AuthorizationIntegrationTests {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private UserNotificationRepository notificationRepository;
 
     @Autowired
     private MerchantProfileRepository merchantProfileRepository;
@@ -114,6 +121,135 @@ class AuthorizationIntegrationTests {
                 .andReturn();
 
         assertResponseTraceMatchesHeader(result);
+    }
+
+    @Test
+    void authenticatedUserCanReadAndUpdateNotificationPreferences() throws Exception {
+        mockMvc.perform(get("/api/v1/users/me/notification-preferences"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        String token = signupAndSignin();
+        mockMvc.perform(get("/api/v1/users/me/notification-preferences")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.matchingDeals").value(true))
+                .andExpect(jsonPath("$.data.buyerOrderUpdates").value(true))
+                .andExpect(jsonPath("$.data.merchantOrderUpdates").value(true))
+                .andExpect(jsonPath("$.data.pickupReminders").value(true))
+                .andExpect(jsonPath("$.data.emailEnabled").value(false));
+
+        mockMvc.perform(put("/api/v1/users/me/notification-preferences")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "matchingDeals": false,
+                                  "buyerOrderUpdates": true,
+                                  "merchantOrderUpdates": false,
+                                  "pickupReminders": true,
+                                  "emailEnabled": true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.matchingDeals").value(false))
+                .andExpect(jsonPath("$.data.merchantOrderUpdates").value(false))
+                .andExpect(jsonPath("$.data.emailEnabled").value(true));
+
+        mockMvc.perform(get("/api/v1/users/me/notification-preferences")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.matchingDeals").value(false))
+                .andExpect(jsonPath("$.data.emailEnabled").value(true));
+    }
+
+    @Test
+    void notificationPreferenceUpdateRequiresEveryField() throws Exception {
+        String token = signupAndSignin();
+
+        mockMvc.perform(put("/api/v1/users/me/notification-preferences")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "matchingDeals": false,
+                                  "buyerOrderUpdates": true,
+                                  "merchantOrderUpdates": false,
+                                  "pickupReminders": true
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void authenticatedUserCanListCountAndReadNotifications() throws Exception {
+        mockMvc.perform(get("/api/v1/notifications"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+
+        String token = signupAndSignin();
+        User buyer = userRepository.findByEmailIgnoreCase("kien@gmail.com").orElseThrow();
+        UserNotification notification = notificationRepository.saveAndFlush(new UserNotification(
+                buyer,
+                DealMatchReason.BIG_DISCOUNT,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "Deal phù hợp dành cho bạn",
+                "Bread combo đang giảm hơn 50%.",
+                "https://cdn.lootfast.test/deal.png"
+        ));
+
+        mockMvc.perform(get("/api/v1/notifications")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.items[0].notificationId")
+                        .value(notification.getPublicId().toString()))
+                .andExpect(jsonPath("$.data.items[0].type").value("MATCHING_DEAL"))
+                .andExpect(jsonPath("$.data.items[0].read").value(false));
+
+        mockMvc.perform(get("/api/v1/notifications/unread-count")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.unreadCount").value(1));
+
+        mockMvc.perform(put("/api/v1/notifications/{notificationId}/read",
+                        notification.getPublicId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.read").value(true))
+                .andExpect(jsonPath("$.data.readAt").exists());
+
+        mockMvc.perform(get("/api/v1/notifications/unread-count")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.unreadCount").value(0));
+    }
+
+    @Test
+    void authenticatedUserCanUpdateDiscoveryPreferencesUsedForDealMatching() throws Exception {
+        String token = signupAndSignin();
+
+        mockMvc.perform(put("/api/v1/users/me/discovery-preferences")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "pickupArea": "District 1",
+                                  "favoriteCategories": ["bakery", "VEGETARIAN"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pickupArea").value("District 1"))
+                .andExpect(jsonPath("$.data.favoriteCategories[0]").value("BAKERY"))
+                .andExpect(jsonPath("$.data.favoriteCategories[1]").value("VEGETARIAN"));
+
+        mockMvc.perform(get("/api/v1/users/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pickupArea").value("District 1"))
+                .andExpect(jsonPath("$.data.favoriteCategories[0]").value("BAKERY"));
     }
 
     @Test

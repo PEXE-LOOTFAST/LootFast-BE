@@ -50,6 +50,12 @@ public class OrderController {
     return ApiResponse.success(service.list(jwt.getSubject(), status, page, size));
   }
 
+  @GetMapping("/impact-summary")
+  @Operation(summary = "Tổng hợp số đơn hoàn tất, phần ăn giải cứu và tiền đã tiết kiệm")
+  public ApiResponse<OrderImpactSummaryResponse> impactSummary(@AuthenticationPrincipal Jwt jwt) {
+    return ApiResponse.success(service.impactSummary(jwt.getSubject()));
+  }
+
   @GetMapping("/{orderId}")
   @Operation(summary = "Đọc trạng thái hiện tại của đơn thuộc người mua")
   public ApiResponse<OrderResponse> get(

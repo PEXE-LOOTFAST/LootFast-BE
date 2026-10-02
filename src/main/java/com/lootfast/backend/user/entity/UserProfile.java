@@ -20,6 +20,7 @@ import org.hibernate.annotations.OnDeleteAction;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 @Entity
@@ -103,6 +104,23 @@ public class UserProfile {
     public void replaceAvatar(String storageKey, String url) {
         this.avatarStorageKey = storageKey;
         this.avatarUrl = url;
+    }
+
+    public void updateDiscoveryPreferences(
+            String pickupArea,
+            Iterable<String> categoryCodes
+    ) {
+        this.pickupArea = pickupArea == null || pickupArea.isBlank()
+                ? null
+                : pickupArea.trim();
+        favoriteCategories.clear();
+        if (categoryCodes != null) {
+            categoryCodes.forEach(categoryCode -> {
+                if (categoryCode != null && !categoryCode.isBlank()) {
+                    favoriteCategories.add(categoryCode.trim().toUpperCase(Locale.ROOT));
+                }
+            });
+        }
     }
 
     public List<String> getFavoriteCategories() {
