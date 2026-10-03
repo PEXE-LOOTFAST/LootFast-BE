@@ -21,6 +21,28 @@ public interface MerchantProfileRepository extends JpaRepository<MerchantProfile
     @Query("select profile from MerchantProfile profile where profile.user.id = :userId")
     Optional<MerchantProfile> findByUserIdForUpdate(@Param("userId") Long userId);
 
+    @Query("""
+            select profile
+            from MerchantProfile profile
+            join fetch profile.user merchantUser
+            where merchantUser.publicId = :publicId
+            """)
+    Optional<MerchantProfile> findByUserPublicId(@Param("publicId") UUID publicId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select profile from MerchantProfile profile where profile.user.publicId = :publicId")
+    Optional<MerchantProfile> findByUserPublicIdForUpdate(@Param("publicId") UUID publicId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("""
+            update MerchantProfile profile
+            set profile.suspendedUntil = null
+            where profile.suspendedUntil is not null
+              and profile.suspendedUntil <= :now
+            """)
+    int clearExpiredSuspensions(@Param("now") Instant now);
+
     boolean existsByUserId(Long userId);
 
     @Query("""

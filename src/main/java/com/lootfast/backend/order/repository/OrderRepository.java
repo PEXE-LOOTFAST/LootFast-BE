@@ -38,6 +38,10 @@ public interface OrderRepository extends JpaRepository<CustomerOrder, Long> {
 
   boolean existsByMerchantIdAndStatus(Long merchantId, OrderStatus status);
 
+  long countByMerchantIdAndStatus(Long merchantId, OrderStatus status);
+
+  long countByMerchantIdAndStatusIn(Long merchantId, Collection<OrderStatus> statuses);
+
   @Query(
       """
       select count(o) as completedOrders,
