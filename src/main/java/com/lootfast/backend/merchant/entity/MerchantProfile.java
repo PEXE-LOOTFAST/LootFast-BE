@@ -93,6 +93,12 @@ public class MerchantProfile {
     @Column(name = "verified_at")
     private Instant verifiedAt;
 
+    @Column(name = "review_flagged_at")
+    private Instant reviewFlaggedAt;
+
+    @Column(name = "suspended_until")
+    private Instant suspendedUntil;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -140,6 +146,14 @@ public class MerchantProfile {
         Objects.requireNonNull(approvedAt, "approvedAt must not be null");
         if (verifiedAt == null) {
             verifiedAt = approvedAt;
+        }
+    }
+
+    /** Gắn cờ cho Admin rà soát khi vượt ngưỡng báo cáo. Idempotent: chỉ ghi lần đầu. */
+    public void flagForReview(Instant flaggedAt) {
+        Objects.requireNonNull(flaggedAt, "flaggedAt must not be null");
+        if (reviewFlaggedAt == null) {
+            reviewFlaggedAt = flaggedAt;
         }
     }
 
@@ -235,5 +249,29 @@ public class MerchantProfile {
 
     public Instant getVerifiedAt() {
         return verifiedAt;
+    }
+
+    public boolean isFlaggedForReview() {
+        return reviewFlaggedAt != null;
+    }
+
+    public Instant getReviewFlaggedAt() {
+        return reviewFlaggedAt;
+    }
+
+    public void suspendUntil(Instant until) {
+        this.suspendedUntil = until;
+    }
+
+    public void liftSuspension() {
+        this.suspendedUntil = null;
+    }
+
+    public boolean isSuspended(Instant now) {
+        return suspendedUntil != null && suspendedUntil.isAfter(now);
+    }
+
+    public Instant getSuspendedUntil() {
+        return suspendedUntil;
     }
 }

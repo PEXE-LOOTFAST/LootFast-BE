@@ -65,11 +65,12 @@ class FlywayPostgresMigrationIntegrationTests {
                 .load()
                 .migrate();
 
-        // V12-V27, including merchant bank accounts, order records, MoMo removal,
+        // V12-V30, including merchant bank accounts, order records, MoMo removal,
         // merchant deal management, the order finalized_at column, and the order
         // price/pickup snapshots, deal lifecycle, payment audit, verification badge,
-        // notification preferences and matching-deal notifications, apply on V11.
-        assertEquals(16, result.migrationsExecuted);
+        // notification preferences, matching-deal notifications, store reports,
+        // the merchant review flag and merchant sanctions, apply on V11.
+        assertEquals(19, result.migrationsExecuted);
         try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
              var statement = connection.prepareStatement("""
                      select

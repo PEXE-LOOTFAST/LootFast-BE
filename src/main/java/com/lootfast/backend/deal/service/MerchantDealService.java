@@ -81,6 +81,12 @@ public class MerchantDealService {
     public MerchantDealResponse create(String subject, CreateMerchantDealRequest request) {
         User merchantUser = access.requireApprovedMerchant(subject);
         MerchantProfile merchant = findProfile(merchantUser.getId());
+        if (merchant.isSuspended(clock.instant())) {
+            throw new ApiException(
+                    ErrorCode.MERCHANT_SUSPENDED,
+                    "Store is suspended and cannot create new deals"
+            );
+        }
         NormalizedDeal normalized = validateAndNormalize(request);
         Deal deal = dealRepository.saveAndFlush(new Deal(
                 merchant,

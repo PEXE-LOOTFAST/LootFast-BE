@@ -108,6 +108,15 @@ public enum ErrorCode {
     // --- Notifications ---
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND),
 
+    // --- Store reports / trust ---
+    REPORT_ALREADY_EXISTS(HttpStatus.CONFLICT),
+    INVALID_REPORT_EVIDENCE(HttpStatus.BAD_REQUEST),
+    REPORT_EVIDENCE_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE),
+    REPORT_EVIDENCE_UPLOAD_FAILED(HttpStatus.BAD_GATEWAY),
+    MERCHANT_SUSPENDED(HttpStatus.CONFLICT),
+    MERCHANT_SANCTION_NOT_FOUND(HttpStatus.NOT_FOUND),
+    SANCTION_ALREADY_LIFTED(HttpStatus.CONFLICT),
+
     // --- System ---
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 

@@ -101,6 +101,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
                    or deal.searchName like concat('%', cast(:searchTerm as String), '%')
                    or merchant.searchName like concat('%', cast(:searchTerm as String), '%'))
               and merchant.storeName is not null
+              and (merchant.suspendedUntil is null or merchant.suspendedUntil <= :now)
               and merchant.latitude between :minLatitude and :maxLatitude
               and (
                     (:crossesDateLine = false
@@ -138,6 +139,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
               and merchant.storeName is not null
               and merchant.latitude is not null
               and merchant.longitude is not null
+              and (merchant.suspendedUntil is null or merchant.suspendedUntil <= :now)
             """)
     Optional<Deal> findPublicDeal(
             @Param("publicId") UUID publicId,
@@ -157,6 +159,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
                       and deal.availableFrom <= :now
                       and deal.availableUntil > :now
                       and deal.pickupEnd > :now
+                      and (merchant.suspendedUntil is null or merchant.suspendedUntil <= :now)
                     """,
             countQuery = """
                     select count(deal)
@@ -167,6 +170,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
                       and deal.availableFrom <= :now
                       and deal.availableUntil > :now
                       and deal.pickupEnd > :now
+                      and (deal.merchant.suspendedUntil is null or deal.merchant.suspendedUntil <= :now)
                     """
     )
     Page<Deal> findPublicStoreDeals(
