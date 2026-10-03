@@ -107,6 +107,13 @@ public interface OrderRepository extends JpaRepository<CustomerOrder, Long> {
   List<UUID> findNoShowCandidates(Instant cutoff);
 
   @Query(
+      "select o.publicId from CustomerOrder o where"
+          + " o.paymentMethod=com.lootfast.backend.order.entity.PaymentMethod.BANK_TRANSFER"
+          + " and o.paymentStatus=com.lootfast.backend.order.entity.PaymentStatus.REVIEW_REQUIRED"
+          + " and o.finalizedAt is not null and o.finalizedAt <= :cutoff")
+  List<UUID> findUnconfirmedTransferCandidates(Instant cutoff);
+
+  @Query(
       "select o.finalizedAt from CustomerOrder o where o.buyer.id=:buyerId and"
           + " o.status=com.lootfast.backend.order.entity.OrderStatus.NO_SHOW and"
           + " o.finalizedAt >= :since order by o.finalizedAt desc")

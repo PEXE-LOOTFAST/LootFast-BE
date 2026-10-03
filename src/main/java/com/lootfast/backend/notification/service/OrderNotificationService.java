@@ -41,6 +41,13 @@ public class OrderNotificationService {
         notifyRecipient(order, order.getBuyer(), NotificationType.PICKUP_REMINDER, false, order.getPublicId());
     }
 
+    /** Nhắc cửa hàng xác nhận chuyển khoản còn treo (task 045). */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void remindMerchantToConfirmTransfer(CustomerOrder order) {
+        notifyRecipient(order, order.getMerchant().getUser(),
+                NotificationType.PAYMENT_CONFIRMATION_REQUEST, true, order.getPublicId());
+    }
+
     private void notifyRecipient(CustomerOrder order, User recipient, NotificationType type, boolean merchant, java.util.UUID occurrenceKey) {
         var preference = preferences.findByUserId(recipient.getId()).orElse(null);
         boolean enabled = preference == null || (type == NotificationType.PICKUP_REMINDER
@@ -57,6 +64,7 @@ public class OrderNotificationService {
             case ORDER_COMPLETED -> "Đơn hàng đã giao thành công";
             case ORDER_NO_SHOW -> "Đơn hàng không được nhận đúng hạn";
             case PICKUP_REMINDER -> "Sắp đến giờ nhận món";
+            case PAYMENT_CONFIRMATION_REQUEST -> "Nhắc xác nhận chuyển khoản";
             default -> throw new IllegalArgumentException("Not an order notification: " + type);
         };
         String message = "%s — %s, %d phần tại %s.".formatted(title,
