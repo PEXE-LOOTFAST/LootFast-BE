@@ -58,6 +58,7 @@ public class MerchantDealService {
     private final DealImageRepository imageRepository;
     private final MatchingDealNotificationService matchingDealNotificationService;
     private final Clock clock;
+    private final com.lootfast.backend.content.service.CategoryService categories;
 
     public MerchantDealService(
             MerchantDealAccess access,
@@ -66,7 +67,8 @@ public class MerchantDealService {
             DealRepository dealRepository,
             DealImageRepository imageRepository,
             MatchingDealNotificationService matchingDealNotificationService,
-            Clock clock
+            Clock clock,
+            com.lootfast.backend.content.service.CategoryService categories
     ) {
         this.access = access;
         this.merchantRepository = merchantRepository;
@@ -75,6 +77,7 @@ public class MerchantDealService {
         this.imageRepository = imageRepository;
         this.matchingDealNotificationService = matchingDealNotificationService;
         this.clock = clock;
+        this.categories = categories;
     }
 
     @Transactional
@@ -88,6 +91,7 @@ public class MerchantDealService {
             );
         }
         NormalizedDeal normalized = validateAndNormalize(request);
+        categories.requireEnabled(normalized.categoryCode());
         Deal deal = dealRepository.saveAndFlush(new Deal(
                 merchant,
                 normalized.name(),
@@ -123,6 +127,7 @@ public class MerchantDealService {
             );
         }
         NormalizedDeal normalized = validateAndNormalize(request);
+        categories.requireEnabled(normalized.categoryCode());
         deal.updateDraft(
                 normalized.name(),
                 normalized.categoryCode(),
@@ -152,6 +157,7 @@ public class MerchantDealService {
             );
         }
 
+        categories.requireEnabled(deal.getCategoryCode());
         List<DealImage> images = requireVisibleDealRules(merchant, deal);
         deal.publish(images.getFirst().getImageUrl());
         dealRepository.flush();

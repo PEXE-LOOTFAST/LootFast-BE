@@ -87,6 +87,10 @@ public class GlobalExceptionHandler {
             MaxUploadSizeExceededException exception,
             HttpServletRequest request
     ) {
+        if (request.getServletPath().matches("/api/v1/admin/banners/[^/]+/image")) {
+            return ResponseEntity.status(ErrorCode.BANNER_IMAGE_TOO_LARGE.getStatus()).body(ApiResponse.error(
+                    ApiError.of("BANNER_IMAGE_TOO_LARGE", "Banner image must not exceed 5 MB")));
+        }
         boolean licenseDocument = isLicenseDocumentRequest(request);
         boolean dealImage = isDealImageRequest(request);
         boolean merchantImage = isMerchantImageRequest(request);
@@ -117,6 +121,10 @@ public class GlobalExceptionHandler {
             MissingServletRequestPartException exception,
             HttpServletRequest request
     ) {
+        if (request.getServletPath().matches("/api/v1/admin/banners/[^/]+/image")) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(ApiError.of(
+                    "INVALID_BANNER_IMAGE", "Banner image file is required")));
+        }
         boolean licenseDocument = isLicenseDocumentRequest(request);
         boolean dealImage = isDealImageRequest(request);
         boolean merchantImage = isMerchantImageRequest(request);
