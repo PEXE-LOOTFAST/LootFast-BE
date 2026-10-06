@@ -88,6 +88,7 @@ public class OrderService {
         users
             .findByIdForUpdate(userId(subject))
             .orElseThrow(() -> error(ErrorCode.USER_NOT_FOUND, "User is unavailable"));
+    if (buyer.isLocked()) throw error(ErrorCode.ACCOUNT_LOCKED, "Account is locked");
     requireBuyer(buyer);
     String fingerprint =
         request.dealId() + ":" + request.quantity() + ":" + request.paymentMethod();
@@ -114,6 +115,10 @@ public class OrderService {
     merchants
         .findByUserIdForUpdate(merchantUserId)
         .orElseThrow(() -> error(ErrorCode.MERCHANT_PROFILE_NOT_FOUND, "Store is unavailable"));
+    User merchantUser = users.findById(merchantUserId)
+        .orElseThrow(() -> error(ErrorCode.USER_NOT_FOUND, "Merchant is unavailable"));
+    if (merchantUser.isLocked())
+      throw error(ErrorCode.DEAL_NOT_RESERVABLE, "Store is unavailable");
     Deal deal =
         deals
             .findReservationForUpdate(request.dealId())

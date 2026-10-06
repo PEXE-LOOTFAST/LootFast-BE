@@ -36,6 +36,7 @@ public class JwtService {
                 .issuedAt(issuedAt)
                 .expiresAt(expiresAt)
                 .subject(user.getId().toString())
+                .claim("auth_version", user.getAuthenticationVersion())
                 .claim("email", user.getEmail())
                 .claim("role", user.getRole().name())
                 .claim("roles", user.getRoles().stream()

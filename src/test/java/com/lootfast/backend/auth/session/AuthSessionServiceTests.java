@@ -40,6 +40,7 @@ class AuthSessionServiceTests {
     @Mock private AuthSessionRepository authSessionRepository;
     @Mock private RefreshTokenCodec refreshTokenCodec;
     @Mock private JwtService jwtService;
+    @Mock private AccountSessionGate accounts;
 
     private AuthSessionService authSessionService;
 
@@ -50,7 +51,8 @@ class AuthSessionServiceTests {
                 refreshTokenCodec,
                 new RefreshTokenProperties(EXPIRATION),
                 jwtService,
-                Clock.fixed(NOW, ZoneOffset.UTC)
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                accounts
         );
     }
 

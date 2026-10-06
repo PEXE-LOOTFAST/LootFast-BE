@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(
         name = "users",
         uniqueConstraints = {
@@ -69,6 +70,23 @@ public class User {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Column(name="locked_at")
+    private Instant lockedAt;
+    @Column(name="lock_reason", length=500)
+    private String lockReason;
+    @Column(name="authentication_version", nullable=false)
+    private long authenticationVersion;
+
+    public boolean isLocked(){return lockedAt!=null;}
+    public Instant getLockedAt(){return lockedAt;}
+    public String getLockReason(){return lockReason;}
+    public long getAuthenticationVersion(){return authenticationVersion;}
+    public void lockAccount(String reason,Instant now){
+        if(isLocked())return;
+        lockedAt=now;lockReason=reason;authenticationVersion++;
+    }
+    public void unlockAccount(){lockedAt=null;lockReason=null;}
 
     protected User() {
     }
