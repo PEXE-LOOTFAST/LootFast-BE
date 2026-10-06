@@ -87,6 +87,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
             join fetch deal.merchant merchant
             join fetch merchant.user merchantUser
             where deal.status = :status
+              and merchantUser.lockedAt is null
               and deal.remainingQuantity > 0
               and deal.availableFrom <= :now
               and deal.availableUntil > :now
@@ -132,6 +133,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
             join fetch deal.merchant merchant
             join fetch merchant.user merchantUser
             where deal.publicId = :publicId
+              and merchantUser.lockedAt is null
               and deal.status in :statuses
               and deal.availableFrom <= :now
               and deal.availableUntil > :now
@@ -154,6 +156,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
                     join fetch deal.merchant merchant
                     join fetch merchant.user merchantUser
                     where merchant.id = :merchantProfileId
+                      and merchantUser.lockedAt is null
                       and deal.status = :status
                       and deal.remainingQuantity > 0
                       and deal.availableFrom <= :now
@@ -165,6 +168,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
                     select count(deal)
                     from Deal deal
                     where deal.merchant.id = :merchantProfileId
+                      and deal.merchant.user.lockedAt is null
                       and deal.status = :status
                       and deal.remainingQuantity > 0
                       and deal.availableFrom <= :now

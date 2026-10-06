@@ -126,6 +126,9 @@ public enum ErrorCode {
 
     INVALID_REPORT_RANGE(HttpStatus.BAD_REQUEST),
 
+    ACCOUNT_LOCKED(HttpStatus.FORBIDDEN),
+    ACCOUNT_ACTION_FORBIDDEN(HttpStatus.CONFLICT),
+
     // --- System ---
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 

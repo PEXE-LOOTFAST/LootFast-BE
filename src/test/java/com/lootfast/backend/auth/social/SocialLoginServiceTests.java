@@ -87,4 +87,23 @@ class SocialLoginServiceTests {
                 "one-time-nonce"
         );
     }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(SocialProvider.class)
+    void lockedAccountsCannotLoginThroughSocialProviders(SocialProvider provider) {
+        var request = new SocialLoginRequest(provider, "identity-token", "nonce", null, null,
+                true, "terms-v1", true, "privacy-v1");
+        var identity = new SocialIdentityTokenVerifier.VerifiedSocialIdentity(provider, "subject",
+                "locked@test.local", "Locked", "User");
+        User user = new User("Locked", "User", "locked@test.local", null, null,
+                UserRole.BUYER, UserStatus.VERIFIED);
+        user.lockAccount("Test lock", java.time.Instant.now());
+        when(tokenVerifier.verify(provider, "identity-token", "nonce")).thenReturn(identity);
+        when(transactionService.findOrCreate(identity, request)).thenReturn(user);
+        var error = org.junit.jupiter.api.Assertions.assertThrows(
+                com.lootfast.backend.common.exception.ApiException.class, () -> service.login(request));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                com.lootfast.backend.common.exception.ErrorCode.ACCOUNT_LOCKED, error.getErrorCode());
+        org.mockito.Mockito.verifyNoInteractions(jwtService, authSessionService);
+    }
+
 }

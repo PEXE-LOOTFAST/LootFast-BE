@@ -44,6 +44,7 @@ public class SigninService {
             throw new ApiException(ErrorCode.INVALID_CREDENTIALS, "Invalid email or password");
         }
 
+        if (user.isLocked()) throw new ApiException(ErrorCode.ACCOUNT_LOCKED);
         // Check sau password để không lộ thông tin: email tồn tại mà chưa verify
         if (user.getStatus() == com.lootfast.backend.user.entity.UserStatus.UNVERIFIED) {
             throw new ApiException(ErrorCode.ACCOUNT_NOT_VERIFIED,

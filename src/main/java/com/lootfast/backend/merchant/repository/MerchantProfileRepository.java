@@ -50,6 +50,7 @@ public interface MerchantProfileRepository extends JpaRepository<MerchantProfile
             from MerchantProfile profile
             join fetch profile.user merchantUser
             where merchantUser.publicId = :publicId
+              and merchantUser.lockedAt is null
               and profile.storeName is not null
               and profile.latitude is not null
               and profile.longitude is not null

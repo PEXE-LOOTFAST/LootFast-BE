@@ -363,9 +363,9 @@ class AuthorizationIntegrationTests {
         mockMvc.perform(get("/api/v1/users/me")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error.code").value("USER_NOT_FOUND"))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
                 .andExpect(jsonPath("$.error.message")
-                        .value("Authenticated user is no longer available"));
+                        .value("Authentication is required"));
     }
 
     @Test
