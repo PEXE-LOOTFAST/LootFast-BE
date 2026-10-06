@@ -291,6 +291,33 @@ class AuthorizationIntegrationTests {
     }
 
     @Test
+    void globalDealFeedIsPublicAndRejectsPartialCoordinates() throws Exception {
+        mockMvc.perform(get("/api/v1/deals").param("page", "0").param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.size").value(20));
+        for (String coordinate : new String[]{"latitude", "longitude"}) {
+            mockMvc.perform(get("/api/v1/deals").param(coordinate, "10"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("INVALID_DEAL_FILTER"));
+        }
+        mockMvc.perform(get("/api/v1/deals").param("size", "51"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void dealFeedOpenApiDeclaresOptionalCoordinates() throws Exception {
+        String body = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        for (String coordinate : new String[]{"latitude", "longitude"}) {
+            java.util.List<Boolean> required = JsonPath.read(body,
+                    "$.paths['/api/v1/deals'].get.parameters[?(@.name=='" + coordinate + "')].required");
+            assertEquals(java.util.List.of(false), required);
+        }
+    }
+
+    @Test
     void discoveryReadsArePublicButFavoritesRequireAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/deals/{dealId}", UUID.randomUUID()))
                 .andExpect(status().isNotFound())

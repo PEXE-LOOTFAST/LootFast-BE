@@ -3,8 +3,8 @@ package com.lootfast.backend.deal.dto;
 import java.time.Instant;
 
 public record DealDiscoveryQuery(
-        double latitude,
-        double longitude,
+        Double latitude,
+        Double longitude,
         double radiusKm,
         String keyword,
         String categoryCode,

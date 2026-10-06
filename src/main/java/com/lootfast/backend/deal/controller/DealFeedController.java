@@ -43,19 +43,19 @@ public class DealFeedController {
     }
 
     @Operation(
-            summary = "Tìm và lọc deal đang hoạt động theo vị trí",
-            description = "Tìm không dấu theo tên món/cửa hàng; lọc theo bán kính, danh mục, mức giảm và khoảng thời gian nhận. Kết quả được sắp xếp theo khoảng cách và phân trang."
+            summary = "Tìm deal đang bán ở mọi vị trí hoặc theo bán kính",
+            description = "Bỏ cả latitude và longitude để xem mọi vị trí, sắp xếp mới nhất và distanceKm=null. Truyền đủ hai tọa độ để lọc theo radiusKm và sắp xếp gần nhất. radiusKm chỉ áp dụng khi có tọa độ. Hỗ trợ tìm không dấu, danh mục, mức giảm và thời gian nhận; tối đa 50 deal mỗi trang."
     )
     @GetMapping
     public ResponseEntity<ApiResponse<PagedResponse<DealFeedItemResponse>>> getFeed(
-            @RequestParam
+            @RequestParam(required = false)
             @DecimalMin(value = "-90.0")
             @DecimalMax(value = "90.0")
-            double latitude,
-            @RequestParam
+            Double latitude,
+            @RequestParam(required = false)
             @DecimalMin(value = "-180.0")
             @DecimalMax(value = "180.0")
-            double longitude,
+            Double longitude,
             @RequestParam(defaultValue = "1.0")
             @DecimalMin(value = "0.1")
             @DecimalMax(value = "50.0")

@@ -48,6 +48,7 @@ class DealFeedIntegrationTests {
 
     private static final Instant NOW = Instant.parse("2026-09-15T04:00:00Z");
 
+    @Autowired private jakarta.persistence.EntityManager entityManager;
     @Autowired private UserRepository userRepository;
     @Autowired private MerchantProfileRepository merchantProfileRepository;
     @Autowired private DealRepository dealRepository;
@@ -189,6 +190,60 @@ class DealFeedIntegrationTests {
         assertEquals(0, response.rating().reviewCount());
     }
 
+    @Test
+    void globalFeedIncludesDistantDealsWithNullDistanceAndStableDatabasePagination() {
+        createDeal("Hanoi bakery", 21.0285, 105.8542, DealStatus.ACTIVE, 2);
+        createDeal("Draft bakery", 21.0285, 105.8542, DealStatus.DRAFT, 2);
+        createDeal("Removed bakery", 21.0285, 105.8542, DealStatus.REMOVED, 2);
+        var first = dealFeedService.getFeed(globalQuery(null, null, null, null, null, 0, 1));
+        var second = dealFeedService.getFeed(globalQuery(null, null, null, null, null, 1, 1));
+        assertEquals(3, first.totalElements());
+        assertEquals(3, first.totalPages());
+        assertEquals("Hanoi bakery", first.items().getFirst().name());
+        assertNull(first.items().getFirst().distanceKm());
+        assertEquals("Far bakery", second.items().getFirst().name());
+        assertTrue(dealFeedService.getFeed(globalQuery(null,null,null,null,null,3,1)).items().isEmpty());
+    }
+
+    @Test
+    void globalFeedRetainsEachOptionalFilterAndExcludesExpiredAndFutureDeals() {
+        for (var query : java.util.List.of(
+                globalQuery("near",null,null,null,null,0,1),
+                globalQuery(null,"BAKERY",null,null,null,0,1),
+                globalQuery(null,null,40,null,null,0,1),
+                globalQuery(null,null,null,NOW.plusSeconds(4000),null,0,1),
+                globalQuery(null,null,null,null,NOW.plusSeconds(6000),0,1))) {
+            assertEquals(query.keyword() == null ? 2 : 1, dealFeedService.getFeed(query).totalElements());
+        }
+        var expired = createDeal("Expired bakery",10.7,106.7,DealStatus.ACTIVE,2);
+        var future = createDeal("Future bakery",10.7,106.7,DealStatus.ACTIVE,2);
+        dealRepository.flush();
+        // Change only fixture sale times; production migration/data is untouched.
+        entityManager.createNativeQuery("update deals set available_until = :end where id = :id")
+                .setParameter("end", NOW.minusSeconds(1)).setParameter("id",expired.getId()).executeUpdate();
+        entityManager.createNativeQuery("update deals set available_from = :start where id = :id")
+                .setParameter("start", NOW.plusSeconds(3600)).setParameter("id",future.getId()).executeUpdate();
+        entityManager.clear();
+        assertEquals(2,dealFeedService.getFeed(globalQuery(null,null,null,null,null,0,20)).totalElements());
+    }
+
+    @Test
+    void feedRejectsPartialCoordinatesAndInvalidPagination() {
+        for (var query : java.util.List.of(
+                new DealDiscoveryQuery(10.7,null,1,null,null,null,null,null,0,20),
+                new DealDiscoveryQuery(null,106.7,1,null,null,null,null,null,0,20),
+                globalQuery(null,null,null,null,null,-1,20),
+                globalQuery(null,null,null,null,null,0,51))) {
+            assertEquals(ErrorCode.INVALID_DEAL_FILTER,
+                    assertThrows(ApiException.class, () -> dealFeedService.getFeed(query)).getErrorCode());
+        }
+    }
+
+    private DealDiscoveryQuery globalQuery(String keyword, String category, Integer discount,
+            Instant from, Instant to, int page, int size) {
+        return new DealDiscoveryQuery(null,null,1,keyword,category,discount,from,to,page,size);
+    }
+
     private Deal createDeal(
             String name,
             double latitude,
@@ -236,10 +291,12 @@ class DealFeedIntegrationTests {
                 NOW.plusSeconds(7_200),
                 NOW.minusSeconds(3_600),
                 NOW.plusSeconds(7_200),
-                status == DealStatus.HIDDEN ? DealStatus.ACTIVE : status
+                status == DealStatus.HIDDEN || status == DealStatus.REMOVED ? DealStatus.ACTIVE : status
         );
         if (status == DealStatus.HIDDEN) {
             deal.hide(NOW);
+        } else if (status == DealStatus.REMOVED) {
+            deal.remove(merchantUser, "No longer available", NOW);
         }
         return dealRepository.save(deal);
     }
@@ -289,10 +346,12 @@ class DealFeedIntegrationTests {
                 pickupEnd,
                 NOW.minusSeconds(3_600),
                 pickupEnd,
-                status == DealStatus.HIDDEN ? DealStatus.ACTIVE : status
+                status == DealStatus.HIDDEN || status == DealStatus.REMOVED ? DealStatus.ACTIVE : status
         );
         if (status == DealStatus.HIDDEN) {
             deal.hide(NOW);
+        } else if (status == DealStatus.REMOVED) {
+            deal.remove(merchantUser, "No longer available", NOW);
         }
         return dealRepository.save(deal);
     }

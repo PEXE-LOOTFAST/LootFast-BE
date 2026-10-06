@@ -10,6 +10,8 @@ import com.lootfast.backend.deal.entity.Deal;
 import com.lootfast.backend.deal.entity.DealStatus;
 import com.lootfast.backend.deal.repository.DealRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -61,7 +63,17 @@ public class DealFeedService {
 
     @Transactional(readOnly = true)
     public PagedResponse<DealFeedItemResponse> getFeed(DealDiscoveryQuery query) {
+        validateQuery(query);
         validatePickupWindow(query.pickupFrom(), query.pickupTo());
+        if (query.latitude() == null) {
+            var page = dealRepository.findGlobalFeed(
+                    DealStatus.ACTIVE, clock.instant(), normalizeCategory(query.categoryCode()),
+                    query.minDiscountPercent(), query.pickupFrom(), query.pickupTo(),
+                    SearchNormalizer.normalize(query.keyword()),
+                    PageRequest.of(query.page(), query.size(),
+                            Sort.by(Sort.Direction.DESC, "createdAt", "id")));
+            return PagedResponse.from(page.map(deal -> responseMapper.toFeedItem(deal, null)));
+        }
         GeoDistance.GeoBounds bounds = GeoDistance.bounds(
                 query.latitude(),
                 query.longitude(),
@@ -121,6 +133,25 @@ public class DealFeedService {
                 located.deal(),
                 BigDecimal.valueOf(located.distanceKm()).setScale(3, RoundingMode.HALF_UP)
         );
+    }
+
+    private void validateQuery(DealDiscoveryQuery query) {
+        if ((query.latitude() == null) != (query.longitude() == null)) {
+            throw new ApiException(ErrorCode.INVALID_DEAL_FILTER,
+                    "latitude and longitude must both be provided or both omitted");
+        }
+        if (query.page() < 0 || query.size() < 1 || query.size() > 50
+                || (long) query.page() * query.size() > Integer.MAX_VALUE) {
+            throw new ApiException(ErrorCode.INVALID_DEAL_FILTER, "Invalid pagination; size must be 1 to 50");
+        }
+        if (query.latitude() != null && (!Double.isFinite(query.latitude()) || !Double.isFinite(query.longitude())
+                || query.latitude() < -90 || query.latitude() > 90
+                || query.longitude() < -180 || query.longitude() > 180)) {
+            throw new ApiException(ErrorCode.INVALID_DEAL_FILTER, "Invalid coordinates");
+        }
+        if (!Double.isFinite(query.radiusKm()) || query.radiusKm() < 0.1 || query.radiusKm() > 50) {
+            throw new ApiException(ErrorCode.INVALID_DEAL_FILTER, "radiusKm must be 0.1 to 50");
+        }
     }
 
     private void validatePickupWindow(Instant pickupFrom, Instant pickupTo) {
