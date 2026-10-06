@@ -124,6 +124,8 @@ public enum ErrorCode {
     TICKET_EVIDENCE_UPLOAD_FAILED(HttpStatus.BAD_GATEWAY),
     INVALID_TICKET_TRANSITION(HttpStatus.CONFLICT),
 
+    INVALID_REPORT_RANGE(HttpStatus.BAD_REQUEST),
+
     // --- System ---
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
