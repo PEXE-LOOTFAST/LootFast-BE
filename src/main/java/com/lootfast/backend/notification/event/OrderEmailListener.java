@@ -1,22 +1,18 @@
 package com.lootfast.backend.notification.event;
 
-import com.lootfast.backend.common.email.EmailSender;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.lootfast.backend.notification.outbox.*;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.event.*;
+import org.springframework.context.event.EventListener;
+import org.springframework.web.util.HtmlUtils;
 
 @Component
 class OrderEmailListener {
-    private static final Logger log = LoggerFactory.getLogger(OrderEmailListener.class);
-    private final EmailSender emailSender;
-    OrderEmailListener(EmailSender emailSender) { this.emailSender = emailSender; }
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void send(OrderEmailEvent event) {
-        try {
-            emailSender.sendOrderNotification(event.email(), event.notificationId(), event.title(), event.message());
-        } catch (RuntimeException exception) {
-            log.error("Could not schedule order notification email {}", event.notificationId(), exception);
-        }
+    private final EmailOutboxService outbox;
+    OrderEmailListener(EmailOutboxService outbox) { this.outbox = outbox; }
+    @EventListener
+    public void enqueue(OrderEmailEvent event) {
+        String body = "<h2>" + HtmlUtils.htmlEscape(event.title()) + "</h2><p>"
+                + HtmlUtils.htmlEscape(event.message()) + "</p><p>Mở LootFast để xem đơn hàng.</p>";
+        outbox.enqueue(event.notificationId(), event.email(), "LootFast — " + event.title(), body, event.category());
     }
 }

@@ -21,6 +21,8 @@ public interface UserNotificationRepository extends JpaRepository<UserNotificati
 
     boolean existsByRecipientIdAndTypeAndOrderPublicIdAndOccurrenceKey(Long recipientId, NotificationType type, UUID orderId, UUID occurrenceKey);
 
+    java.util.Optional<UserNotification> findByPublicId(UUID publicId);
+
     Page<UserNotification> findByRecipientId(Long recipientId, Pageable pageable);
 
     long countByRecipientIdAndReadAtIsNull(Long recipientId);

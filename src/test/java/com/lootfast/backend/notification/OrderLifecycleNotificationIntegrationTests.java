@@ -69,6 +69,7 @@ class OrderLifecycleNotificationIntegrationTests {
     merchants.save(merchant);
   }
 
+  @Autowired com.lootfast.backend.notification.outbox.EmailOutboxRepository outbox;
   @Autowired com.lootfast.backend.notification.repository.UserNotificationRepository notifications;
   @Autowired com.lootfast.backend.notification.repository.NotificationPreferenceRepository preferences;
   @Autowired com.lootfast.backend.notification.service.PickupReminderService reminders;
@@ -178,10 +179,12 @@ class OrderLifecycleNotificationIntegrationTests {
     preferences.saveAndFlush(preference);
     reserve(activeDeal(5), 1);
     assertEquals(2, notifications.count());
+    assertEquals(1, outbox.count());
     org.springframework.test.context.transaction.TestTransaction.flagForRollback();
     org.springframework.test.context.transaction.TestTransaction.end();
     org.springframework.test.context.transaction.TestTransaction.start();
     assertEquals(0, notifications.count());
+    assertEquals(0, outbox.count());
     org.mockito.Mockito.verify(emailSender, org.mockito.Mockito.never()).sendOrderNotification(
         org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
         org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());

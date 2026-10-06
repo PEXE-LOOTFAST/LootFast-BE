@@ -69,7 +69,11 @@ public class OrderNotificationService {
         }
         var notification = notifications.save(new UserNotification(recipient, type, order, occurrenceKey, title, message));
         if (preference != null && preference.isEmailEnabled()) {
-            events.publishEvent(new OrderEmailEvent(recipient.getEmail(), notification.getPublicId(), title, message));
+            var category = type == NotificationType.PICKUP_REMINDER
+                    ? com.lootfast.backend.notification.outbox.EmailPreferenceCategory.PICKUP_REMINDERS
+                    : merchant ? com.lootfast.backend.notification.outbox.EmailPreferenceCategory.MERCHANT_ORDER_UPDATES
+                    : com.lootfast.backend.notification.outbox.EmailPreferenceCategory.BUYER_ORDER_UPDATES;
+            events.publishEvent(new OrderEmailEvent(recipient.getEmail(), notification.getPublicId(), title, message, category));
         }
     }
 }
