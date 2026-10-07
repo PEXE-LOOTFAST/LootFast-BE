@@ -35,13 +35,15 @@ class CurrentUserServiceTests {
     @Mock
     private UserProfileRepository userProfileRepository;
 
+    @Mock private com.lootfast.backend.content.service.CategoryService categories;
     private CurrentUserService currentUserService;
 
     @BeforeEach
     void setUp() {
         currentUserService = new CurrentUserService(
                 userRepository,
-                userProfileRepository
+                userProfileRepository,
+                categories
         );
     }
 

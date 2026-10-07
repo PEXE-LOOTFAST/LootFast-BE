@@ -19,13 +19,16 @@ public class CurrentUserService {
 
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
+    private final com.lootfast.backend.content.service.CategoryService categories;
 
     public CurrentUserService(
             UserRepository userRepository,
-            UserProfileRepository userProfileRepository
+            UserProfileRepository userProfileRepository,
+            com.lootfast.backend.content.service.CategoryService categories
     ) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
+        this.categories = categories;
     }
 
     @Transactional(readOnly = true)
@@ -65,6 +68,8 @@ public class CurrentUserService {
                         "Authenticated user is no longer available"));
         UserProfile profile = userProfileRepository.findByUserId(userId)
                 .orElseGet(() -> new UserProfile(user, defaultDisplayName(user)));
+        request.favoriteCategories().stream().map(c -> c.trim().toUpperCase(java.util.Locale.ROOT))
+                .distinct().sorted().forEach(categories::requireEnabled);
         profile.updateDiscoveryPreferences(request.pickupArea(), request.favoriteCategories());
         return DiscoveryPreferencesResponse.from(userProfileRepository.save(profile));
     }

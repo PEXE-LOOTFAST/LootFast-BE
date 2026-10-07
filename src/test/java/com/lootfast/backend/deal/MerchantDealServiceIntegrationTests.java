@@ -159,6 +159,27 @@ class MerchantDealServiceIntegrationTests {
                 ));
     }
 
+    @Autowired private com.lootfast.backend.content.service.CategoryService categories;
+
+    @Test
+    void disabledCategoryPreservesOldDealAndTemplateButBlocksNewUse() {
+        String code = "CUSTOM_" + UUID.randomUUID().toString().replace("-", "").toUpperCase();
+        var category = categories.create(admin.getId().toString(),
+                new com.lootfast.backend.content.dto.ContentRequests.CategoryCreate(code, "Custom", true, 0));
+        var request = validRequest("Custom deal");
+        var draft = dealService.create(subject(), new CreateMerchantDealRequest(request.name(), code,
+                request.originalPrice(), request.discountedPrice(), request.totalQuantity(),
+                request.preparationMinutes(), request.saleStartsAt(), request.saleEndsAt(),
+                request.pickupStartsAt(), request.pickupEndsAt()));
+        var template = templateService.save(subject(), draft.dealId());
+        categories.edit(admin.getId().toString(), code,
+                new com.lootfast.backend.content.dto.ContentRequests.CategoryEdit("Custom", false, 0, category.revision()));
+        assertEquals(code, dealRepository.findByPublicId(draft.dealId()).orElseThrow().getCategoryCode());
+        var failure = assertThrows(ApiException.class, () -> templateService.reuse(subject(), template.templateId(),
+                new ReuseDealTemplateRequest(10, SALE_START, SALE_END, PICKUP_START, PICKUP_END)));
+        assertEquals(ErrorCode.CATEGORY_UNAVAILABLE, failure.getErrorCode());
+    }
+
     @Test
     void approvedMerchantCanCreateUploadPublishAndListDeal() throws Exception {
         MerchantDealResponse draft = dealService.create(subject(), validRequest("Bread combo"));
