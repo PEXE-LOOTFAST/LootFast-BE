@@ -120,4 +120,47 @@ class BrevoEmailSenderTests {
         sender.sendOrderNotification("buyer@example.com", id, "Order update", "<script>Meal</script>");
         server.verify();
     }
+    @Test
+    void queuedEmailReportsAcceptanceSynchronously() {
+        UUID id=UUID.randomUUID();
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andExpect(jsonPath("$.headers.idempotencyKey").value(id.toString()))
+                .andRespond(withSuccess("{\"messageId\":\"queued-message\"}", MediaType.APPLICATION_JSON));
+        org.junit.jupiter.api.Assertions.assertEquals(EmailDeliveryResult.Outcome.ACCEPTED,
+                sender.sendQueuedEmail("buyer@example.com", id, "Order", "<p>Order</p>").outcome());
+        server.verify();
+    }
+
+    @Test
+    void queuedEmailReturnsRetryAfterOnRateLimitWithoutInternalRetry() {
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
+                        .withStatus(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", "90"));
+        var result=sender.sendQueuedEmail("buyer@example.com", UUID.randomUUID(), "Order", "<p>Order</p>");
+        org.junit.jupiter.api.Assertions.assertEquals(EmailDeliveryResult.Outcome.RETRYABLE,result.outcome());
+        org.junit.jupiter.api.Assertions.assertEquals(Duration.ofSeconds(90),result.retryAfter());
+        server.verify();
+    }
+
+    @Test
+    void queuedEmailTreatsDuplicateIdempotencyKeyAsAlreadyAccepted() {
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andRespond(withBadRequest().body("{\"code\":\"duplicate_parameter\",\"message\":\"Email for the idempotency key has already been processed\"}")
+                        .contentType(MediaType.APPLICATION_JSON));
+        org.junit.jupiter.api.Assertions.assertEquals(EmailDeliveryResult.Outcome.ACCEPTED,
+                sender.sendQueuedEmail("buyer@example.com",UUID.randomUUID(),"Order","<p>Order</p>").outcome());
+        server.verify();
+    }
+
+    @Test
+    void queuedEmailClassifiesPermanentAndServerErrors() {
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email")).andRespond(withBadRequest());
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withServerError());
+        org.junit.jupiter.api.Assertions.assertEquals(EmailDeliveryResult.Outcome.PERMANENT_FAILURE,
+                sender.sendQueuedEmail("buyer@example.com",UUID.randomUUID(),"Order","<p>Order</p>").outcome());
+        org.junit.jupiter.api.Assertions.assertEquals(EmailDeliveryResult.Outcome.RETRYABLE,
+                sender.sendQueuedEmail("buyer@example.com",UUID.randomUUID(),"Order","<p>Order</p>").outcome());
+        server.verify();
+    }
 }

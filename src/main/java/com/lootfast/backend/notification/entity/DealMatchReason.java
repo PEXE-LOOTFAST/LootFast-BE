@@ -4,5 +4,6 @@ public enum DealMatchReason {
     FAVORITE_STORE,
     FAVORITE_ITEM,
     NEARBY_AREA,
-    BIG_DISCOUNT
+    BIG_DISCOUNT,
+    SAVED_FILTER
 }
