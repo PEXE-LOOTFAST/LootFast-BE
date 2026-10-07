@@ -57,6 +57,7 @@ public class MerchantDealService {
     private final DealRepository dealRepository;
     private final DealImageRepository imageRepository;
     private final MatchingDealNotificationService matchingDealNotificationService;
+    private final com.lootfast.backend.buyer.savedfilter.notification.SavedFilterNotificationService premiumNotifications;
     private final Clock clock;
     private final com.lootfast.backend.content.service.CategoryService categories;
 
@@ -68,6 +69,7 @@ public class MerchantDealService {
             DealImageRepository imageRepository,
             MatchingDealNotificationService matchingDealNotificationService,
             Clock clock,
+            com.lootfast.backend.buyer.savedfilter.notification.SavedFilterNotificationService premiumNotifications,
             com.lootfast.backend.content.service.CategoryService categories
     ) {
         this.access = access;
@@ -77,6 +79,7 @@ public class MerchantDealService {
         this.imageRepository = imageRepository;
         this.matchingDealNotificationService = matchingDealNotificationService;
         this.clock = clock;
+        this.premiumNotifications=premiumNotifications;
         this.categories = categories;
     }
 
@@ -162,6 +165,7 @@ public class MerchantDealService {
         deal.publish(images.getFirst().getImageUrl());
         dealRepository.flush();
         matchingDealNotificationService.createForPublishedDeal(deal);
+        premiumNotifications.published(deal);
         return MerchantDealResponse.from(deal, images);
     }
 

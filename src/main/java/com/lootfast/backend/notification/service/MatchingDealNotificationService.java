@@ -114,6 +114,7 @@ public class MatchingDealNotificationService {
                     .formatted(deal.getName(), storeName);
             case NEARBY_AREA -> "Có deal %s gần khu vực bạn theo dõi tại %s."
                     .formatted(deal.getName(), storeName);
+            case SAVED_FILTER -> "Deal %s phù hợp bộ lọc đã lưu của bạn tại %s.".formatted(deal.getName(),storeName);
             case BIG_DISCOUNT -> "%s đang giảm hơn 50%% tại %s."
                     .formatted(deal.getName(), storeName);
         };

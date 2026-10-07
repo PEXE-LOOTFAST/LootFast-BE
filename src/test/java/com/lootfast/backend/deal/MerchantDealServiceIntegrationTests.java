@@ -68,6 +68,7 @@ class MerchantDealServiceIntegrationTests {
     private static final Instant PICKUP_START = Instant.parse("2030-01-02T09:00:00Z");
     private static final Instant PICKUP_END = Instant.parse("2030-01-02T10:00:00Z");
 
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
     @Autowired private MerchantDealService dealService;
     @Autowired private DealTemplateService templateService;
     @Autowired private DealImageService imageService;
@@ -195,6 +196,8 @@ class MerchantDealServiceIntegrationTests {
 
         MerchantDealResponse published = dealService.publish(subject(), draft.dealId());
         assertEquals(DealStatus.ACTIVE, published.status());
+        assertEquals(SALE_START, jdbc.queryForObject("select j.event_at from premium_deal_notification_jobs j join deals d on d.id=j.deal_id where d.public_id=?",
+                java.sql.Timestamp.class, published.dealId()).toInstant());
         assertEquals(withImage.images().getFirst().imageUrl(), published.primaryImageUrl());
 
         var page = dealService.list(subject(), 0, 20);
