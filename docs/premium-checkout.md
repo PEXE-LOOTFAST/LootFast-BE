@@ -1,3 +1,6 @@
+> Cập nhật: IPN/ReturnURL và cấp quyền sandbox đã được bổ sung ở bước tiếp theo.
+> Xem [premium-vnpay-ipn.md](premium-vnpay-ipn.md). Phần dưới mô tả phạm vi bước checkout ban đầu.
+
 # Premium checkout — 085+087+088+103
 
 Bước 3: tạo đơn Premium, lưu consent/snapshot, khởi tạo URL VNPay **sandbox**.

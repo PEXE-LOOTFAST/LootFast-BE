@@ -122,3 +122,8 @@ lootfast:
     hash-secret: ${VNPAY_HASH_SECRET:}
     payment-url: ${VNPAY_PAYMENT_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
     return-url: ${VNPAY_RETURN_URL:}
+    fe-result-url: ${VNPAY_FE_RESULT_URL:}
+    query:
+      enabled: ${VNPAY_QUERY_ENABLED:false}
+      url: ${VNPAY_QUERY_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
+      ip: ${VNPAY_QUERY_IP:127.0.0.1}
