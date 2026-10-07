@@ -35,7 +35,8 @@ public class VnpayCheckout {
         throw new IllegalArgumentException("Missing or invalid VNPAY_TMN_CODE/VNPAY_HASH_SECRET");
       if (!paymentUrl.equals("https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"))
         throw new IllegalArgumentException(
-            "VNPAY_PAYMENT_URL must use sandbox until IPN fulfillment is implemented");
+            "VNPAY_PAYMENT_URL must use sandbox until production reconciliation and end-to-end"
+                + " verification are ready");
       try {
         var uri = URI.create(returnUrl);
         if (!"https".equals(uri.getScheme())
@@ -95,6 +96,31 @@ public class VnpayCheckout {
           + HexFormat.of().formatHex(mac.doFinal(query.getBytes(StandardCharsets.UTF_8)));
     } catch (java.security.GeneralSecurityException e) {
       throw new IllegalStateException("Cannot sign VNPay request");
+    }
+  }
+
+  public String merchantCode() {
+    return tmn;
+  }
+
+  public String sign(String canonical) {
+    requireEnabled();
+    try {
+      var mac = Mac.getInstance("HmacSHA512");
+      mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA512"));
+      return HexFormat.of().formatHex(mac.doFinal(canonical.getBytes(StandardCharsets.UTF_8)));
+    } catch (java.security.GeneralSecurityException e) {
+      throw new IllegalStateException("HMAC unavailable");
+    }
+  }
+
+  public boolean authentic(String canonical, String signature) {
+    requireEnabled();
+    try {
+      return java.security.MessageDigest.isEqual(
+          HexFormat.of().parseHex(sign(canonical)), HexFormat.of().parseHex(signature));
+    } catch (IllegalArgumentException e) {
+      return false;
     }
   }
 

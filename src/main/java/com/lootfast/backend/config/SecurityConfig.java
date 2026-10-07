@@ -71,6 +71,8 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/deals/**",
                                 "/api/v1/stores/**",
+                                "/api/v1/payments/vnpay/ipn",
+                                "/api/v1/payments/vnpay/return",
                                 "/api/v1/premium/plans",
                                 "/api/v1/premium/plans/**",
                                 "/api/v1/categories",

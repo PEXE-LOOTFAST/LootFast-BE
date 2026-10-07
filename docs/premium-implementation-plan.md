@@ -1,6 +1,6 @@
 # Kế hoạch Premium buyer và merchant
 
-Trạng thái: **đã có catalog, subscription foundation và checkout sandbox; chưa có IPN/cấp quyền từ thanh toán hoặc mở bán thật**.
+Trạng thái: **đã có catalog, subscription foundation, checkout, IPN/cấp quyền và QueryDr sandbox; chưa mở bán thật hoặc có hoàn tiền/email vòng đời**.
 Ngày lập: 2026-10-07. Checkout: `/home/kien/FPTU/Semester 8/EXE201/lootfast-backend`.
 Nhánh: `feature/merchant-premium-analytics`, HEAD `2da6e24`.
 
@@ -12,7 +12,7 @@ Outbox hiện có phục vụ email Premium theo bộ lọc, chưa có email vò
 Chưa có gói bán, phiên bản giá, đơn mua, subscription trả phí, thanh toán VNPay,
 đối soát hay lịch sử giao dịch Premium.
 
-Task 075 đã có code local, cùng các phần Premium trên, nhưng đang chưa commit/push.
+Task 075 và nền tảng Premium/checkout đã được merge vào dev. Bước IPN được triển khai riêng trên feature/premium-vnpay-ipn.
 Trước khi bắt đầu coding nhóm mới cần lưu phần hiện tại theo quy trình Git và xác nhận
 mốc dev đã chứa code phụ thuộc. Không tự commit, chuyển nhánh bỏ thay đổi, merge PR
 hay mang migration trùng số từ nhánh Outbox cũ sang.
@@ -266,3 +266,16 @@ giai đoạn này. Chưa commit/push; backend OFF, local DB V32. Bước tiếp 
 089+090+091+092: xác minh IPN và atomic fulfillment, liên kết order/period,
 callback trùng/đến muộn và ReturnURL không cấp quyền. Frontend/kênh bán/CH Play
 chưa chốt; backend sandbox không tự cho phép một luồng Android thanh toán ngoài.
+
+## Bước 4 — IPN và atomic fulfillment
+
+Đã có xác minh callback HMAC-SHA512, liên kết order/receipt/period, khóa và constraint
+chống cấp trùng, ReturnURL không cấp quyền. Xem [premium-vnpay-ipn.md](premium-vnpay-ipn.md).
+QueryDr, hoàn tiền, email vòng đời và nghiệm thu với VNPay thật vẫn còn ở bước sau.
+Các ghi chú bước 1–3 phía trên là trạng thái tại thời điểm triển khai từng bước.
+
+## Bước tiếp theo — QueryDr sandbox
+
+Đã bổ sung client xác minh response, job PostgreSQL có lease/retry/backoff, API owner
+yêu cầu/xem đối soát và dùng chung fulfillment IPN. Chi tiết [premium-querydr.md](premium-querydr.md).
+Chưa giải quyết hoàn tiền, review thủ công, lifecycle email hoặc E2E với VNPay thật.

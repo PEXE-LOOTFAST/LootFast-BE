@@ -119,6 +119,11 @@ public class CheckoutRepository {
         url,
         Timestamp.from(now),
         Timestamp.from(expires));
+    jdbc.update(
+        "insert into premium_reconciliation_jobs(order_id,next_at,deadline) values(?,?,?)",
+        order,
+        Timestamp.from(expires.plusSeconds(300)),
+        Timestamp.from(now.plusSeconds(48 * 3600)));
     audit(order, "PAYMENT_INITIATED", now);
     return new Attempt(id, reference, "PENDING", now, expires);
   }

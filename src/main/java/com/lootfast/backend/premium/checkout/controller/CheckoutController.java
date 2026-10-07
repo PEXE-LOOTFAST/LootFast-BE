@@ -42,7 +42,7 @@ public class CheckoutController {
       summary = "Khởi tạo hoặc trả lại URL VNPay sandbox",
       description =
           "Chỉ một attempt mỗi đơn. URL hết hạn không chứng minh giao dịch thất bại. VNPay mặc định"
-              + " tắt; chưa có IPN ở bước này.")
+              + " tắt khi chưa cấu hình khóa; kết quả được xác minh qua IPN hoặc QueryDr.")
   public ApiResponse<Payment> pay(
       @AuthenticationPrincipal Jwt jwt, @PathVariable UUID id, HttpServletRequest request) {
     return ApiResponse.success(service.pay(jwt.getSubject(), id, request.getRemoteAddr()));
