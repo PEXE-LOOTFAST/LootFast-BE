@@ -21,7 +21,7 @@ public class SavedFilterNotificationScheduler {
   @Scheduled(
       fixedDelayString = "PT10S",
       initialDelayString = "PT10S",
-      scheduler = "savedFilterNotificationScheduler")
+      scheduler = "savedFilterNotificationTaskScheduler")
   public void sweep() {
     try {
       for (int i = 0; i < 20 && service.processBatch(); i++) {}
