@@ -31,6 +31,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
     "spring.flyway.enabled=true", "spring.jpa.hibernate.ddl-auto=validate",
@@ -48,6 +50,7 @@ abstract class StoreReviewTests {
   @Autowired MockMvc mvc;
   @Autowired JwtService tokens;
   @Autowired TestRestTemplate http;
+  @Autowired PlatformTransactionManager transactions;
   @MockitoBean SavedFilterNotificationService matchingWorker;
   User buyer, otherBuyer, merchantUser, otherMerchant, admin;
   MerchantProfile merchant;
@@ -97,6 +100,16 @@ abstract class StoreReviewTests {
     assertEquals(r, service.mine(subject(buyer), o.getPublicId()));
     error(ErrorCode.REVIEW_NOT_FOUND, () -> service.mine(subject(otherBuyer), o.getPublicId()));
     error(ErrorCode.REVIEW_ALREADY_EXISTS, () -> service.create(subject(buyer), o.getPublicId(), new Create(1, null)));
+  }
+
+  @Test void merchantCannotReviewOwnStoreUsingBuyerRole() {
+    new TransactionTemplate(transactions).executeWithoutResult(tx ->
+        users.findById(merchantUser.getId()).orElseThrow().addRole(UserRole.BUYER));
+    var selfOrder = new CustomerOrder(merchantUser, deal, 1, PaymentMethod.CASH, UUID.randomUUID(), "fp", NOW);
+    selfOrder.complete(NOW);
+    orders.saveAndFlush(selfOrder);
+    error(ErrorCode.REVIEW_NOT_ALLOWED, () -> service.create(subject(merchantUser), selfOrder.getPublicId(), new Create(5, "Self")));
+    assertEquals(0, service.summary(merchant.getId()).reviewCount());
   }
 
   @Test void merchantReplyIsOwnedImmutableAndReplaySafe() {
@@ -204,5 +217,7 @@ abstract class StoreReviewTests {
     var docs = http.getForEntity("/v3/api-docs", JsonNode.class);
     assertTrue(docs.getStatusCode().is2xxSuccessful());
     assertTrue(docs.getBody().path("paths").has("/api/v1/stores/{merchantId}/reviews"));
+    assertTrue(docs.getBody().path("paths").path("/api/v1/orders/{orderId}/review")
+        .path("post").path("security").path(0).has("bearerAuth"));
   }
 }

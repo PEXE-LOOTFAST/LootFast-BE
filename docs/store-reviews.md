@@ -3,6 +3,7 @@
 ## Quy tắc
 
 - Buyer VERIFIED, không bị khóa, chỉ đánh giá đơn COMPLETED của chính mình.
+- Tài khoản merchant có thêm role buyer vẫn không được đánh giá cửa hàng của chính mình.
 - Mỗi đơn một đánh giá, 1–5 sao; nhận xét tùy chọn, tối đa 1000 ký tự. Không có ảnh ở bản đầu.
 - Đánh giá không sửa/xóa ở bản đầu; merchant không được sửa nội dung của buyer.
 - Merchant phản hồi đúng cửa hàng của mình một lần, tối đa 1000 ký tự. Gửi lại cùng nội dung trả kết quả cũ; nội dung khác trả REVIEW_REPLY_CONFLICT (409). Không phản hồi đánh giá đang bị ẩn.

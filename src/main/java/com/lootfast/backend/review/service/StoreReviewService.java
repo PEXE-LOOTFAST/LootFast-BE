@@ -45,6 +45,8 @@ public class StoreReviewService {
     locks.apply();
     var order = orders.findForUpdate(orderId).orElseThrow(() -> new ApiException(ErrorCode.ORDER_NOT_FOUND));
     if (!order.getBuyer().getId().equals(buyer.getId())) throw new ApiException(ErrorCode.ORDER_NOT_FOUND);
+    if (order.getMerchant().getUser().getId().equals(buyer.getId()))
+      throw new ApiException(ErrorCode.REVIEW_NOT_ALLOWED, "You cannot review your own store");
     if (order.getStatus() != OrderStatus.COMPLETED)
       throw new ApiException(ErrorCode.REVIEW_NOT_ALLOWED, "Only completed orders can be reviewed");
     if (reviews.existsByOrderId(order.getId())) throw new ApiException(ErrorCode.REVIEW_ALREADY_EXISTS);
