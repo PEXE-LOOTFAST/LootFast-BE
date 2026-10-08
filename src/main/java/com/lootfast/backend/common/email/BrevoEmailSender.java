@@ -6,19 +6,23 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.nio.charset.StandardCharsets;
+import java.math.BigDecimal;
+import java.text.NumberFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
 @Service
 @ConditionalOnProperty(name = "email.provider", havingValue = "brevo", matchIfMissing = true)
-class BrevoEmailSender implements EmailSender {
+class BrevoEmailSender implements EmailSender, QueuedEmailSender {
 
     private static final Logger log = LoggerFactory.getLogger(BrevoEmailSender.class);
     private static final int MAX_ATTEMPTS = 2;
@@ -56,6 +60,95 @@ class BrevoEmailSender implements EmailSender {
         );
     }
 
+    @Override
+    @Async("emailExecutor")
+    public void sendMatchingDeal(
+            String to,
+            UUID notificationId,
+            String dealName,
+            String storeName,
+            BigDecimal originalPrice,
+            BigDecimal discountedPrice
+    ) {
+        String safeDealName = HtmlUtils.htmlEscape(dealName);
+        String safeStoreName = HtmlUtils.htmlEscape(storeName);
+        send(
+                new BrevoEmailRequest(
+                        new Sender(properties.fromName(), properties.fromEmail()),
+                        List.of(new Recipient(to)),
+                        "LootFast — Deal phù hợp dành cho bạn",
+                        buildMatchingDealBody(
+                                safeDealName,
+                                safeStoreName,
+                                originalPrice,
+                                discountedPrice
+                        ),
+                        Map.of("idempotencyKey", notificationId.toString()),
+                        List.of("notification", "matching-deal")
+                ),
+                "matching-deal"
+        );
+    }
+
+    @Override
+    @Async("emailExecutor")
+    public void sendOrderNotification(String to, UUID notificationId, String title, String message) {
+        send(new BrevoEmailRequest(
+                new Sender(properties.fromName(), properties.fromEmail()), List.of(new Recipient(to)),
+                "LootFast — " + title,
+                "<h2>" + HtmlUtils.htmlEscape(title) + "</h2><p>"
+                        + HtmlUtils.htmlEscape(message) + "</p><p>Mở LootFast để xem đơn hàng.</p>",
+                Map.of("idempotencyKey", notificationId.toString()), List.of("notification", "order")),
+                "order-notification");
+    }
+
+    @Override
+    public EmailDeliveryResult sendQueuedEmail(String to, UUID idempotencyKey, String subject, String htmlBody) {
+        try {
+            var response = restClient.post().uri("/smtp/email").contentType(MediaType.APPLICATION_JSON)
+                    .body(new BrevoEmailRequest(new Sender(properties.fromName(), properties.fromEmail()),
+                            List.of(new Recipient(to)), subject, htmlBody,
+                            Map.of("idempotencyKey", idempotencyKey.toString()), List.of("notification")))
+                    .retrieve().body(BrevoEmailResponse.class);
+            if (response == null || response.messageId() == null || response.messageId().isBlank()) {
+                return EmailDeliveryResult.retry("MISSING_MESSAGE_ID", java.time.Duration.ZERO);
+            }
+            return EmailDeliveryResult.accepted();
+        } catch (RestClientResponseException exception) {
+            int status = exception.getStatusCode().value();
+            // Brevo reports an already accepted idempotency key as a duplicate error.
+            // Inspect only bounded structured fields; never log the response body.
+            if (status == 400 || status == 409) {
+                String body = exception.getResponseBodyAsString();
+                if (body.length() <= 65536) {
+                    try {
+                        var error = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
+                        if (error != null && "duplicate_parameter".equals(error.path("code").asText())
+                                && error.path("message").asText().toLowerCase(java.util.Locale.ROOT).contains("idempotency")) {
+                            return EmailDeliveryResult.accepted();
+                        }
+                    } catch (java.io.IOException ignored) { /* Continue classifying by HTTP status. */ }
+                }
+            }
+            if (status == 429 || status == 408 || status >= 500) {
+                var delay = java.time.Duration.ZERO;
+                if (exception.getResponseHeaders() != null) {
+                    String value = exception.getResponseHeaders().getFirst("Retry-After");
+                    if (value != null) {
+                        try { delay = java.time.Duration.ofSeconds(Math.max(0, Math.min(21600, Long.parseLong(value)))); }
+                        catch (NumberFormatException ignored) { /* Fallback to outbox backoff. */ }
+                    }
+                }
+                return EmailDeliveryResult.retry("HTTP_" + status, delay);
+            }
+            return EmailDeliveryResult.failed("HTTP_" + status);
+        } catch (ResourceAccessException exception) {
+            return EmailDeliveryResult.retry("TRANSPORT_ERROR", java.time.Duration.ZERO);
+        } catch (RestClientException exception) {
+            return EmailDeliveryResult.retry("INVALID_PROVIDER_RESPONSE", java.time.Duration.ZERO);
+        }
+    }
+
     private void sendOtp(String to, String otp, String purpose, String subject, String heading) {
         BrevoEmailRequest request = new BrevoEmailRequest(
                 new Sender(properties.fromName(), properties.fromEmail()),
@@ -66,6 +159,10 @@ class BrevoEmailSender implements EmailSender {
                 List.of("otp", purpose)
         );
 
+        send(request, "OTP");
+    }
+
+    private void send(BrevoEmailRequest request, String logCategory) {
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
                 BrevoEmailResponse response = restClient.post()
@@ -79,7 +176,8 @@ class BrevoEmailSender implements EmailSender {
                     throw new RestClientException("Brevo returned no messageId");
                 }
 
-                log.info("OTP email accepted by Brevo, messageId={}", sanitizeForLog(response.messageId()));
+                log.info("{} email accepted by Brevo, messageId={}",
+                        logCategory, sanitizeForLog(response.messageId()));
                 return;
             } catch (RestClientResponseException exception) {
                 if (attempt < MAX_ATTEMPTS && exception.getStatusCode().is5xxServerError()) {
@@ -89,7 +187,8 @@ class BrevoEmailSender implements EmailSender {
                     continue;
                 }
                 log.error(
-                        "Brevo rejected OTP email with HTTP status {}",
+                        "Brevo rejected {} email with HTTP status {}",
+                        logCategory,
                         exception.getStatusCode().value()
                 );
                 return;
@@ -100,10 +199,11 @@ class BrevoEmailSender implements EmailSender {
                     }
                     continue;
                 }
-                log.error("Brevo OTP request failed after {} attempts", attempt, exception);
+                log.error("Brevo {} request failed after {} attempts",
+                        logCategory, attempt, exception);
                 return;
             } catch (RestClientException exception) {
-                log.error("Brevo OTP request failed", exception);
+                log.error("Brevo {} request failed", logCategory, exception);
                 return;
             }
         }
@@ -140,6 +240,29 @@ class BrevoEmailSender implements EmailSender {
                   <p style="color:#888;font-size:12px">Nếu bạn không yêu cầu điều này, hãy bỏ qua email này.</p>
                 </div>
                 """.formatted(heading, otp);
+    }
+
+    private String buildMatchingDealBody(
+            String dealName,
+            String storeName,
+            BigDecimal originalPrice,
+            BigDecimal discountedPrice
+    ) {
+        NumberFormat money = NumberFormat.getIntegerInstance(Locale.forLanguageTag("vi-VN"));
+        return """
+                <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto">
+                  <h2>Deal phù hợp dành cho bạn</h2>
+                  <p><strong>%s</strong> tại <strong>%s</strong> vừa được đăng trên LootFast.</p>
+                  <p><span style="text-decoration:line-through;color:#888">%s ₫</span>
+                     <strong style="color:#e74c3c;font-size:20px">%s ₫</strong></p>
+                  <p>Mở LootFast để xem thời gian nhận món và số lượng còn lại.</p>
+                </div>
+                """.formatted(
+                dealName,
+                storeName,
+                money.format(originalPrice),
+                money.format(discountedPrice)
+        );
     }
 
     private record Sender(String name, String email) {

@@ -1,8 +1,12 @@
 package com.lootfast.backend.order.service;
 
+import com.lootfast.backend.notification.service.OrderNotificationService;
+import com.lootfast.backend.notification.entity.NotificationType;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lootfast.backend.common.exception.*;
+import com.lootfast.backend.common.response.PagedResponse;
 import com.lootfast.backend.deal.entity.*;
 import com.lootfast.backend.deal.repository.DealRepository;
 import com.lootfast.backend.merchant.repository.*;
@@ -11,14 +15,22 @@ import com.lootfast.backend.order.entity.*;
 import com.lootfast.backend.order.repository.OrderRepository;
 import com.lootfast.backend.user.entity.*;
 import com.lootfast.backend.user.repository.UserRepository;
+import java.math.BigDecimal;
 import java.time.*;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class OrderService {
+  // BR-ORD-09: 3 no-show trong 30 ngày thì 14 ngày kế chỉ được đặt đơn trả trước (chặn tiền mặt).
+  private static final int NO_SHOW_THRESHOLD = 3;
+  private static final long NO_SHOW_WINDOW_SECONDS = 30L * 24 * 3600;
+  private static final long NO_SHOW_PENALTY_SECONDS = 14L * 24 * 3600;
+
   private final com.lootfast.backend.config.DatabaseLockTimeout lockTimeout;
   private final UserRepository users;
   private final DealRepository deals;
@@ -27,6 +39,7 @@ public class OrderService {
   private final OrderRepository orders;
   private final ObjectMapper json;
   private final Clock clock;
+  private final OrderNotificationService notifications;
 
   public OrderService(
       UserRepository users,
@@ -36,7 +49,8 @@ public class OrderService {
       OrderRepository orders,
       ObjectMapper json,
       Clock clock,
-      com.lootfast.backend.config.DatabaseLockTimeout lockTimeout) {
+      com.lootfast.backend.config.DatabaseLockTimeout lockTimeout,
+      OrderNotificationService notifications) {
     this.lockTimeout = lockTimeout;
     this.users = users;
     this.deals = deals;
@@ -45,6 +59,7 @@ public class OrderService {
     this.orders = orders;
     this.json = json;
     this.clock = clock;
+    this.notifications = notifications;
   }
 
   public static Long userId(String subject) {
@@ -73,6 +88,7 @@ public class OrderService {
         users
             .findByIdForUpdate(userId(subject))
             .orElseThrow(() -> error(ErrorCode.USER_NOT_FOUND, "User is unavailable"));
+    if (buyer.isLocked()) throw error(ErrorCode.ACCOUNT_LOCKED, "Account is locked");
     requireBuyer(buyer);
     String fingerprint =
         request.dealId() + ":" + request.quantity() + ":" + request.paymentMethod();
@@ -84,7 +100,9 @@ public class OrderService {
       if (!clock.instant().isBefore(original.getReplayUntil()))
         throw error(ErrorCode.IDEMPOTENCY_KEY_EXPIRED, "Use a new key after 24 hours");
       try {
-        return json.readValue(original.getCreationResponse(), OrderResponse.class);
+        OrderResponse stored = json.readValue(original.getCreationResponse(), OrderResponse.class);
+        // Orders created immediately before V21 have an old serialized response without pickup data.
+        return stored.pickupCode() == null ? OrderResponse.from(original) : stored;
       } catch (JsonProcessingException e) {
         throw new IllegalStateException("Stored reservation response is invalid");
       }
@@ -97,6 +115,10 @@ public class OrderService {
     merchants
         .findByUserIdForUpdate(merchantUserId)
         .orElseThrow(() -> error(ErrorCode.MERCHANT_PROFILE_NOT_FOUND, "Store is unavailable"));
+    User merchantUser = users.findById(merchantUserId)
+        .orElseThrow(() -> error(ErrorCode.USER_NOT_FOUND, "Merchant is unavailable"));
+    if (merchantUser.isLocked())
+      throw error(ErrorCode.DEAL_NOT_RESERVABLE, "Store is unavailable");
     Deal deal =
         deals
             .findReservationForUpdate(request.dealId())
@@ -131,6 +153,10 @@ public class OrderService {
     if (orders.reservedQuantity(buyer.getId(), request.dealId()) + request.quantity() > 5)
       throw error(
           ErrorCode.RESERVED_QUANTITY_LIMIT, "At most 5 uncollected portions per deal are allowed");
+    if (request.paymentMethod() == PaymentMethod.CASH && isNoShowRestricted(buyer.getId(), now))
+      throw error(
+          ErrorCode.NO_SHOW_RESTRICTED,
+          "Too many recent no-shows; pay by bank transfer to reserve for now");
     if (deal.getRemainingQuantity() < request.quantity())
       throw error(ErrorCode.INSUFFICIENT_STOCK, "Not enough portions remain");
     CustomerOrder order =
@@ -151,6 +177,7 @@ public class OrderService {
       throw new IllegalStateException("Cannot serialize reservation response");
     }
     orders.saveAndFlush(order);
+    notifications.notifyBoth(order, NotificationType.ORDER_RESERVED);
     return response;
   }
 
@@ -165,6 +192,10 @@ public class OrderService {
       throw error(ErrorCode.ORDER_NOT_FOUND, "Order was not found");
     if (order.getStatus() != OrderStatus.RESERVED)
       throw error(ErrorCode.ORDER_NOT_CANCELLABLE, "Order can no longer be cancelled");
+    if (order.getPaymentStatus() != PaymentStatus.UNPAID)
+      throw error(
+          ErrorCode.PAYMENT_STATE_CONFLICT,
+          "Reported or confirmed payments require merchant support before cancellation");
     Instant now = clock.instant();
     if (!now.isBefore(order.getPickupStart().minusSeconds(1800)))
       throw error(
@@ -175,6 +206,7 @@ public class OrderService {
             .orElseThrow(() -> error(ErrorCode.DEAL_NOT_FOUND, "Deal was not found"));
     deal.restore(order.getQuantity(), now);
     order.cancel(now);
+    notifications.notifyBoth(order, NotificationType.ORDER_CANCELLED);
     return OrderResponse.from(order);
   }
 
@@ -197,6 +229,28 @@ public class OrderService {
             .orElseThrow(() -> error(ErrorCode.DEAL_NOT_FOUND, "Deal was not found"));
     deal.restore(order.getQuantity(), now);
     order.markNoShow(now);
+    notifications.notifyBoth(order, NotificationType.ORDER_NO_SHOW);
+  }
+
+  @Transactional(readOnly = true)
+  public PagedResponse<OrderResponse> list(String subject, OrderStatus status, int page, int size) {
+    Long buyerId = userId(subject);
+    var pageable =
+        PageRequest.of(page, size, Sort.by("createdAt").descending().and(Sort.by("id").descending()));
+    var orderPage =
+        status == null
+            ? orders.findByBuyerId(buyerId, pageable)
+            : orders.findByBuyerIdAndStatus(buyerId, status, pageable);
+    return PagedResponse.from(orderPage.map(OrderResponse::from));
+  }
+
+  @Transactional(readOnly = true)
+  public OrderImpactSummaryResponse impactSummary(String subject) {
+    var totals = orders.summarizeCompletedImpact(userId(subject));
+    return new OrderImpactSummaryResponse(
+        totals.getCompletedOrders(),
+        totals.getRescuedPortions() == null ? 0 : totals.getRescuedPortions(),
+        totals.getTotalSavings() == null ? BigDecimal.ZERO : totals.getTotalSavings());
   }
 
   @Transactional(readOnly = true)
@@ -205,6 +259,16 @@ public class OrderService {
         orders
             .findByPublicIdAndBuyerId(orderId, userId(subject))
             .orElseThrow(() -> error(ErrorCode.ORDER_NOT_FOUND, "Order was not found")));
+  }
+
+  /**
+   * True nếu người mua đang trong thời gian bị hạn chế no-show: có ít nhất {@code NO_SHOW_THRESHOLD}
+   * đơn NO_SHOW trong 30 ngày gần nhất và chưa qua 14 ngày kể từ lần no-show mới nhất.
+   */
+  private boolean isNoShowRestricted(Long buyerId, Instant now) {
+    var noShowTimes = orders.recentNoShowTimes(buyerId, now.minusSeconds(NO_SHOW_WINDOW_SECONDS));
+    return noShowTimes.size() >= NO_SHOW_THRESHOLD
+        && now.isBefore(noShowTimes.get(0).plusSeconds(NO_SHOW_PENALTY_SECONDS));
   }
 
   private void requireBuyer(User user) {

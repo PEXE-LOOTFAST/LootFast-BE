@@ -4,10 +4,13 @@ import com.lootfast.backend.common.response.ApiResponse;
 import com.lootfast.backend.common.response.PagedResponse;
 import com.lootfast.backend.deal.dto.CreateMerchantDealRequest;
 import com.lootfast.backend.deal.dto.MerchantDealResponse;
+import com.lootfast.backend.deal.dto.DealTemplateResponse;
+import com.lootfast.backend.deal.dto.RemoveDealRequest;
 import com.lootfast.backend.deal.dto.ReorderDealImagesRequest;
 import com.lootfast.backend.deal.dto.UpdateDealQuantityRequest;
 import com.lootfast.backend.deal.service.DealImageService;
 import com.lootfast.backend.deal.service.MerchantDealService;
+import com.lootfast.backend.deal.service.DealTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,13 +50,61 @@ public class MerchantDealController {
 
     private final MerchantDealService dealService;
     private final DealImageService imageService;
+    private final DealTemplateService templateService;
 
     public MerchantDealController(
             MerchantDealService dealService,
-            DealImageService imageService
+            DealImageService imageService,
+            DealTemplateService templateService
     ) {
         this.dealService = dealService;
         this.imageService = imageService;
+        this.templateService = templateService;
+    }
+
+    @Operation(summary = "Lưu thông tin deal thành mẫu tái sử dụng")
+    @PostMapping("/{dealId}/template")
+    public ResponseEntity<ApiResponse<DealTemplateResponse>> saveTemplate(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID dealId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                templateService.save(jwt.getSubject(), dealId)
+        ));
+    }
+
+    @Operation(summary = "Tạm ẩn deal khỏi khách hàng mới")
+    @PostMapping("/{dealId}/hide")
+    public ResponseEntity<ApiResponse<MerchantDealResponse>> hide(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID dealId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                dealService.hide(jwt.getSubject(), dealId)
+        ));
+    }
+
+    @Operation(summary = "Mở lại deal đang tạm ẩn")
+    @PostMapping("/{dealId}/restore")
+    public ResponseEntity<ApiResponse<MerchantDealResponse>> restore(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID dealId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                dealService.restore(jwt.getSubject(), dealId)
+        ));
+    }
+
+    @Operation(summary = "Gỡ vĩnh viễn deal nhưng giữ nguyên các đơn đã đặt")
+    @PostMapping("/{dealId}/remove")
+    public ResponseEntity<ApiResponse<MerchantDealResponse>> remove(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID dealId,
+            @Valid @RequestBody RemoveDealRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                dealService.remove(jwt.getSubject(), dealId, request)
+        ));
     }
 
     @Operation(summary = "Tạo bản nháp deal")

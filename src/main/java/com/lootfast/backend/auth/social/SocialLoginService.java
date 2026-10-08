@@ -48,6 +48,7 @@ public class SocialLoginService {
                     "The social account was linked concurrently. Please try again"
             );
         }
+        if (user.isLocked()) throw new ApiException(ErrorCode.ACCOUNT_LOCKED);
         if (user.getStatus() != UserStatus.VERIFIED) {
             throw new ApiException(ErrorCode.ACCOUNT_NOT_VERIFIED);
         }

@@ -5,6 +5,7 @@ import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.common.response.PagedResponse;
 import com.lootfast.backend.deal.dto.CreateMerchantDealRequest;
 import com.lootfast.backend.deal.dto.MerchantDealResponse;
+import com.lootfast.backend.deal.dto.RemoveDealRequest;
 import com.lootfast.backend.deal.dto.UpdateDealQuantityRequest;
 import com.lootfast.backend.deal.entity.Deal;
 import com.lootfast.backend.deal.entity.DealImage;
@@ -16,6 +17,7 @@ import com.lootfast.backend.merchant.entity.MerchantOpeningHour;
 import com.lootfast.backend.merchant.entity.MerchantProfile;
 import com.lootfast.backend.merchant.repository.MerchantOpeningHourRepository;
 import com.lootfast.backend.merchant.repository.MerchantProfileRepository;
+import com.lootfast.backend.notification.service.MatchingDealNotificationService;
 import com.lootfast.backend.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -54,7 +56,10 @@ public class MerchantDealService {
     private final MerchantOpeningHourRepository openingHourRepository;
     private final DealRepository dealRepository;
     private final DealImageRepository imageRepository;
+    private final MatchingDealNotificationService matchingDealNotificationService;
+    private final com.lootfast.backend.buyer.savedfilter.notification.SavedFilterNotificationService premiumNotifications;
     private final Clock clock;
+    private final com.lootfast.backend.content.service.CategoryService categories;
 
     public MerchantDealService(
             MerchantDealAccess access,
@@ -62,21 +67,34 @@ public class MerchantDealService {
             MerchantOpeningHourRepository openingHourRepository,
             DealRepository dealRepository,
             DealImageRepository imageRepository,
-            Clock clock
+            MatchingDealNotificationService matchingDealNotificationService,
+            Clock clock,
+            com.lootfast.backend.buyer.savedfilter.notification.SavedFilterNotificationService premiumNotifications,
+            com.lootfast.backend.content.service.CategoryService categories
     ) {
         this.access = access;
         this.merchantRepository = merchantRepository;
         this.openingHourRepository = openingHourRepository;
         this.dealRepository = dealRepository;
         this.imageRepository = imageRepository;
+        this.matchingDealNotificationService = matchingDealNotificationService;
         this.clock = clock;
+        this.premiumNotifications=premiumNotifications;
+        this.categories = categories;
     }
 
     @Transactional
     public MerchantDealResponse create(String subject, CreateMerchantDealRequest request) {
         User merchantUser = access.requireApprovedMerchant(subject);
         MerchantProfile merchant = findProfile(merchantUser.getId());
+        if (merchant.isSuspended(clock.instant())) {
+            throw new ApiException(
+                    ErrorCode.MERCHANT_SUSPENDED,
+                    "Store is suspended and cannot create new deals"
+            );
+        }
         NormalizedDeal normalized = validateAndNormalize(request);
+        categories.requireEnabled(normalized.categoryCode());
         Deal deal = dealRepository.saveAndFlush(new Deal(
                 merchant,
                 normalized.name(),
@@ -112,6 +130,7 @@ public class MerchantDealService {
             );
         }
         NormalizedDeal normalized = validateAndNormalize(request);
+        categories.requireEnabled(normalized.categoryCode());
         deal.updateDraft(
                 normalized.name(),
                 normalized.categoryCode(),
@@ -141,33 +160,69 @@ public class MerchantDealService {
             );
         }
 
-        requireCompleteProfile(merchant);
-        validateSchedule(
-                deal.getAvailableFrom(),
-                deal.getAvailableUntil(),
-                deal.getPickupStart(),
-                deal.getPickupEnd()
-        );
-        Instant now = clock.instant();
-        if (!now.isBefore(deal.getAvailableUntil()) || !now.isBefore(deal.getPickupStart())) {
-            throw new ApiException(
-                    ErrorCode.INVALID_DEAL_SCHEDULE,
-                    "Sale and pickup windows must still be in the future"
-            );
-        }
-        requirePickupInsideOpeningHours(merchant, deal);
-        requireSharedDailySchedule(merchant, deal);
-
-        List<DealImage> images = activeImages(deal.getId());
-        if (images.isEmpty()) {
-            throw new ApiException(
-                    ErrorCode.DEAL_IMAGE_REQUIRED,
-                    "At least one deal image is required before publishing"
-            );
-        }
+        categories.requireEnabled(deal.getCategoryCode());
+        List<DealImage> images = requireVisibleDealRules(merchant, deal);
         deal.publish(images.getFirst().getImageUrl());
         dealRepository.flush();
+        matchingDealNotificationService.createForPublishedDeal(deal);
+        premiumNotifications.published(deal);
         return MerchantDealResponse.from(deal, images);
+    }
+
+    @Transactional
+    public MerchantDealResponse hide(String subject, UUID dealId) {
+        User merchantUser = access.requireApprovedMerchant(subject);
+        merchantRepository.findByUserIdForUpdate(merchantUser.getId())
+                .orElseThrow(this::profileNotFound);
+        Deal deal = findOwnedForUpdate(dealId, merchantUser.getId());
+        if (deal.getStatus() == DealStatus.HIDDEN) {
+            return response(deal);
+        }
+        if (deal.getStatus() != DealStatus.ACTIVE && deal.getStatus() != DealStatus.SOLD_OUT) {
+            throw new ApiException(
+                    ErrorCode.DEAL_NOT_HIDEABLE,
+                    "Only active or sold-out deals can be hidden"
+            );
+        }
+        deal.hide(clock.instant());
+        dealRepository.flush();
+        return response(deal);
+    }
+
+    @Transactional
+    public MerchantDealResponse restore(String subject, UUID dealId) {
+        User merchantUser = access.requireApprovedMerchant(subject);
+        MerchantProfile merchant = merchantRepository.findByUserIdForUpdate(merchantUser.getId())
+                .orElseThrow(this::profileNotFound);
+        Deal deal = findOwnedForUpdate(dealId, merchantUser.getId());
+        if (deal.getStatus() != DealStatus.HIDDEN) {
+            throw new ApiException(
+                    ErrorCode.DEAL_NOT_RESTORABLE,
+                    "Only hidden deals can be restored"
+            );
+        }
+        requireVisibleDealRules(merchant, deal);
+        deal.restoreVisibility();
+        dealRepository.flush();
+        return response(deal);
+    }
+
+    @Transactional
+    public MerchantDealResponse remove(
+            String subject,
+            UUID dealId,
+            RemoveDealRequest request
+    ) {
+        User merchantUser = access.requireApprovedMerchant(subject);
+        merchantRepository.findByUserIdForUpdate(merchantUser.getId())
+                .orElseThrow(this::profileNotFound);
+        Deal deal = findOwnedForUpdate(dealId, merchantUser.getId());
+        if (deal.getStatus() == DealStatus.REMOVED) {
+            return response(deal);
+        }
+        deal.remove(merchantUser, request.reason().trim(), clock.instant());
+        dealRepository.flush();
+        return response(deal);
     }
 
     @Transactional
@@ -310,6 +365,33 @@ public class MerchantDealService {
                     "Store information and location must be completed before publishing"
             );
         }
+    }
+
+    private List<DealImage> requireVisibleDealRules(MerchantProfile merchant, Deal deal) {
+        requireCompleteProfile(merchant);
+        validateSchedule(
+                deal.getAvailableFrom(),
+                deal.getAvailableUntil(),
+                deal.getPickupStart(),
+                deal.getPickupEnd()
+        );
+        Instant now = clock.instant();
+        if (!now.isBefore(deal.getAvailableUntil()) || !now.isBefore(deal.getPickupStart())) {
+            throw new ApiException(
+                    ErrorCode.INVALID_DEAL_SCHEDULE,
+                    "Sale and pickup windows must still be in the future"
+            );
+        }
+        requirePickupInsideOpeningHours(merchant, deal);
+        requireSharedDailySchedule(merchant, deal);
+        List<DealImage> images = activeImages(deal.getId());
+        if (images.isEmpty()) {
+            throw new ApiException(
+                    ErrorCode.DEAL_IMAGE_REQUIRED,
+                    "At least one deal image is required before publishing"
+            );
+        }
+        return images;
     }
 
     private void requirePickupInsideOpeningHours(MerchantProfile merchant, Deal deal) {

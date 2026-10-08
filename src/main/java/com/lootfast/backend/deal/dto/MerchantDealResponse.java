@@ -30,7 +30,10 @@ public record MerchantDealResponse(
         DealStatus status,
         long version,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Instant hiddenAt,
+        Instant removedAt,
+        String removalReason
 ) {
     public static MerchantDealResponse from(Deal deal, List<DealImage> images) {
         BigDecimal discount = deal.getOriginalPrice()
@@ -57,7 +60,10 @@ public record MerchantDealResponse(
                 deal.getStatus(),
                 deal.getVersion(),
                 deal.getCreatedAt(),
-                deal.getUpdatedAt()
+                deal.getUpdatedAt(),
+                deal.getHiddenAt(),
+                deal.getRemovedAt(),
+                deal.getRemovalReason()
         );
     }
 }

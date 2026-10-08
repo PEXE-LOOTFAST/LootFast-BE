@@ -6,6 +6,7 @@ import com.lootfast.backend.order.entity.PaymentMethod;
 import com.lootfast.backend.payment.dto.*;
 import com.lootfast.backend.payment.service.*;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/orders/{orderId}")
 @Tag(name = "Order payments")
 @PreAuthorize("hasRole('BUYER')")
+@SecurityRequirement(name = "bearerAuth")
 public class PaymentController {
   private final PaymentTransactionService transactions;
 
@@ -45,5 +47,12 @@ public class PaymentController {
       @Valid @RequestBody ChangeMethod request) {
     return ApiResponse.success(
         transactions.changeMethod(jwt.getSubject(), orderId, request.paymentMethod()));
+  }
+
+  @PostMapping("/payment-report")
+  @Operation(summary = "Báo đã chuyển khoản để cửa hàng kiểm tra và xác nhận")
+  public ApiResponse<OrderResponse> reportBankTransfer(
+      @AuthenticationPrincipal Jwt jwt, @PathVariable UUID orderId) {
+    return ApiResponse.success(transactions.reportBankTransfer(jwt.getSubject(), orderId));
   }
 }

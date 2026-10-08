@@ -10,6 +10,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.sql.DriverManager;
+import java.time.Duration;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,7 +31,13 @@ class FlywayPostgresMigrationIntegrationTests {
             .withEnv("POSTGRES_USER", USERNAME)
             .withEnv("POSTGRES_PASSWORD", PASSWORD)
             .withExposedPorts(5432)
-            .waitingFor(Wait.forListeningPort());
+            // Probe the actual test database over TCP. PostgreSQL's temporary init server
+            // uses a Unix socket, so it must not satisfy this readiness check.
+            .waitingFor(Wait.forSuccessfulCommand(
+                    "PGPASSWORD=" + PASSWORD + " PGCONNECT_TIMEOUT=2 psql"
+                            + " -h 127.0.0.1 -U " + USERNAME + " -d " + DATABASE
+                            + " --no-password -v ON_ERROR_STOP=1 -tAc 'SELECT 1'"
+            ).withStartupTimeout(Duration.ofSeconds(60)));
 
     @Test
     void latestMigrationsUpgradeADataBearingV10Database() throws Exception {
@@ -65,9 +72,23 @@ class FlywayPostgresMigrationIntegrationTests {
                 .load()
                 .migrate();
 
-        // V12-V19, including merchant bank accounts, order records, MoMo removal,
-        // merchant deal management, and the order finalized_at column, apply on V11.
-        assertEquals(8, result.migrationsExecuted);
+        // V12-V44, including merchant bank accounts, order records, MoMo removal,
+        // merchant deal management, the order finalized_at column, and the order
+        // price/pickup snapshots, deal lifecycle, payment audit, verification badge,
+        // notification preferences, matching-deal notifications, store reports,
+        // the merchant review flag, merchant sanctions and support tickets, apply on V11.
+        assertEquals(33, result.migrationsExecuted);
+        try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
+             var statement = connection.createStatement();
+             var rows = statement.executeQuery("""
+                     select count(*) from deals d
+                     join content_categories c on c.code=upper(trim(d.category_code))
+                     where c.enabled=true
+                     """)) {
+            assertTrue(rows.next());
+            assertEquals(1, rows.getInt(1));
+        }
+
         try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
              var statement = connection.prepareStatement("""
                      select
@@ -79,7 +100,11 @@ class FlywayPostgresMigrationIntegrationTests {
                                    'external_auth_identities',
                                    'user_consents',
                                    'deals',
-                                   'user_favorites'
+                                   'user_favorites',
+                                   'deal_templates',
+                                   'order_payment_events',
+                                   'notification_preferences',
+                                   'notifications'
                                )
                          ) as feature_table_count,
                          (
@@ -117,18 +142,68 @@ class FlywayPostgresMigrationIntegrationTests {
                              join deals on deals.id = images.deal_id
                              where deals.name = 'Bánh mì đặc biệt'
                                and images.status = 'ACTIVE'
-                         ) as migrated_image_count
+                         ) as migrated_image_count,
+                         (
+                             select count(*)
+                             from information_schema.columns
+                             where table_schema = 'public'
+                               and table_name = 'customer_orders'
+                               and column_name = 'pickup_code'
+                               and is_nullable = 'NO'
+                         ) as pickup_code_column_count,
+                         (
+                             select count(*)
+                             from pg_indexes
+                             where schemaname = 'public'
+                               and tablename = 'customer_orders'
+                               and indexname = 'idx_orders_merchant_pickup_start'
+                         ) as merchant_pickup_index_count,
+                         (
+                             select count(*)
+                             from information_schema.columns
+                             where table_schema = 'public'
+                               and table_name = 'deals'
+                               and column_name in (
+                                   'hidden_at',
+                                   'removed_at',
+                                   'removed_by_user_id',
+                                   'removal_reason'
+                               )
+                         ) as deal_lifecycle_column_count,
+                         (
+                             select count(*)
+                             from information_schema.columns
+                             where table_schema = 'public'
+                               and table_name = 'customer_orders'
+                               and column_name in (
+                                   'payment_reported_at',
+                                   'payment_confirmed_at',
+                                   'payment_confirmed_by_user_id'
+                               )
+                         ) as payment_audit_column_count,
+                         (
+                             select count(*)
+                             from merchant_profiles
+                             where id = ?
+                               and verified_at is not null
+                         ) as verified_profile_count
                      """)) {
             statement.setLong(1, existingMerchant.profileId());
+            statement.setLong(2, existingMerchant.profileId());
             try (var rows = statement.executeQuery()) {
                 assertTrue(rows.next());
-                assertEquals(4, rows.getInt(1));
+                assertEquals(8, rows.getInt(1));
                 assertEquals(2, rows.getInt(2));
                 assertEquals(0, rows.getInt(3));
                 assertEquals("banh mi dac biet", rows.getString(4));
                 assertEquals("bep viet", rows.getString(5));
                 assertEquals(3, rows.getInt(6));
                 assertEquals(1, rows.getInt(7));
+                assertEquals(1, rows.getInt(8));
+                assertEquals(1, rows.getInt(9));
+                assertEquals(4, rows.getInt(10));
+                assertEquals(3, rows.getInt(11));
+                assertEquals(1, rows.getInt(12));
             }
         }
     }
@@ -192,6 +267,29 @@ class FlywayPostgresMigrationIntegrationTests {
                 profileId = rows.getLong(1);
             }
         }
+
+        try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
+             var statement = connection.prepareStatement("""
+                     insert into merchant_applications (
+                         public_id,
+                         user_id,
+                         business_license_number,
+                         license_storage_key,
+                         license_format,
+                         submission_id,
+                         status,
+                         submitted_at,
+                         reviewed_at,
+                         created_at,
+                         updated_at
+                     ) values (?, ?, '03123456789012', 'license-key', 'png', ?,
+                               'APPROVED', now(), now(), now(), now())
+                     """)) {
+            statement.setObject(1, UUID.randomUUID());
+            statement.setLong(2, userId);
+            statement.setObject(3, UUID.randomUUID());
+            assertEquals(1, statement.executeUpdate());
+        }
         return new ExistingMerchant(userId, profileId);
     }
 
@@ -217,7 +315,7 @@ class FlywayPostgresMigrationIntegrationTests {
                          created_at,
                          updated_at
                      ) values (
-                         ?, ?, 'Bánh mì đặc biệt', 'BAKERY', 100000, 50000, 3,
+                         ?, ?, 'Bánh mì đặc biệt', 'LEGACY_BREAD', 100000, 50000, 3,
                          'https://cdn.lootfast.test/deal.jpg', 10,
                          now(), now() + interval '2 hours',
                          now() - interval '1 hour', now() + interval '2 hours',

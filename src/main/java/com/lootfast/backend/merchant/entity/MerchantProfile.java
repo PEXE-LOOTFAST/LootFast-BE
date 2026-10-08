@@ -20,6 +20,7 @@ import org.hibernate.annotations.OnDeleteAction;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @DynamicUpdate
@@ -89,6 +90,15 @@ public class MerchantProfile {
     @Column(name = "cover_storage_key", length = 255)
     private String coverStorageKey;
 
+    @Column(name = "verified_at")
+    private Instant verifiedAt;
+
+    @Column(name = "review_flagged_at")
+    private Instant reviewFlaggedAt;
+
+    @Column(name = "suspended_until")
+    private Instant suspendedUntil;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -130,6 +140,21 @@ public class MerchantProfile {
         this.city = city;
         this.latitude = latitude;
         this.longitude = longitude;
+    }
+
+    public void markVerified(Instant approvedAt) {
+        Objects.requireNonNull(approvedAt, "approvedAt must not be null");
+        if (verifiedAt == null) {
+            verifiedAt = approvedAt;
+        }
+    }
+
+    /** Gắn cờ cho Admin rà soát khi vượt ngưỡng báo cáo. Idempotent: chỉ ghi lần đầu. */
+    public void flagForReview(Instant flaggedAt) {
+        Objects.requireNonNull(flaggedAt, "flaggedAt must not be null");
+        if (reviewFlaggedAt == null) {
+            reviewFlaggedAt = flaggedAt;
+        }
     }
 
     @PrePersist
@@ -216,5 +241,37 @@ public class MerchantProfile {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public boolean isVerified() {
+        return verifiedAt != null;
+    }
+
+    public Instant getVerifiedAt() {
+        return verifiedAt;
+    }
+
+    public boolean isFlaggedForReview() {
+        return reviewFlaggedAt != null;
+    }
+
+    public Instant getReviewFlaggedAt() {
+        return reviewFlaggedAt;
+    }
+
+    public void suspendUntil(Instant until) {
+        this.suspendedUntil = until;
+    }
+
+    public void liftSuspension() {
+        this.suspendedUntil = null;
+    }
+
+    public boolean isSuspended(Instant now) {
+        return suspendedUntil != null && suspendedUntil.isAfter(now);
+    }
+
+    public Instant getSuspendedUntil() {
+        return suspendedUntil;
     }
 }

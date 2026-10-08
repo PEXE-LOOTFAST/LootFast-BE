@@ -40,6 +40,7 @@ import java.util.concurrent.Future;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -126,7 +127,10 @@ class MerchantApplicationIntegrationTests {
         User approved = userRepository.findByIdWithRoles(buyer.getId()).orElseThrow();
         assertTrue(approved.hasRole(UserRole.BUYER));
         assertTrue(approved.hasRole(UserRole.MERCHANT));
-        assertTrue(merchantProfileRepository.existsByUserId(buyer.getId()));
+        var approvedProfile = merchantProfileRepository.findByUserId(buyer.getId()).orElseThrow();
+        assertTrue(approvedProfile.isVerified());
+        assertNotNull(approvedProfile.getVerifiedAt());
+        var originalVerifiedAt = approvedProfile.getVerifiedAt();
 
         String refreshedBuyerToken = signin("buyer@lootfast.local");
         mockMvc.perform(get("/api/v1/users/me")
@@ -153,6 +157,12 @@ class MerchantApplicationIntegrationTests {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
                 .andExpect(status().isOk());
         assertEquals(1, merchantProfileRepository.count());
+        assertEquals(
+                originalVerifiedAt,
+                merchantProfileRepository.findByUserId(buyer.getId())
+                        .orElseThrow()
+                        .getVerifiedAt()
+        );
     }
 
     @Test

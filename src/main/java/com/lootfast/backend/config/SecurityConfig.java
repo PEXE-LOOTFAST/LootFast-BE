@@ -46,6 +46,9 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/api/v1/admin/reports/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/admin/premium/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/buyers/me/**").hasRole("BUYER")
                         .requestMatchers(
                                 "/api/v1/auth/signup",
                                 "/api/v1/auth/signin",
@@ -67,7 +70,14 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/deals/**",
-                                "/api/v1/stores/**"
+                                "/api/v1/stores/**",
+                                "/api/v1/payments/vnpay/ipn",
+                                "/api/v1/payments/vnpay/return",
+                                "/api/v1/premium/plans",
+                                "/api/v1/premium/plans/**",
+                                "/api/v1/categories",
+                                "/api/v1/banners",
+                                "/api/v1/legal-documents/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

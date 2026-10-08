@@ -3,6 +3,8 @@ package com.lootfast.backend.user.controller;
 import com.lootfast.backend.common.response.ApiResponse;
 import com.lootfast.backend.user.dto.AvatarResponse;
 import com.lootfast.backend.user.dto.CurrentUserResponse;
+import com.lootfast.backend.user.dto.DiscoveryPreferencesResponse;
+import com.lootfast.backend.user.dto.UpdateDiscoveryPreferencesRequest;
 import com.lootfast.backend.user.service.CurrentUserService;
 import com.lootfast.backend.user.service.UserAvatarService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,6 +23,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -138,6 +142,21 @@ public class CurrentUserController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 userAvatarService.uploadAvatar(jwt.getSubject(), file)
+        ));
+    }
+
+    @Operation(
+            summary = "Cập nhật khu vực theo dõi và danh mục món yêu thích",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @PutMapping("/me/discovery-preferences")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<DiscoveryPreferencesResponse>> updateDiscoveryPreferences(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody UpdateDiscoveryPreferencesRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                currentUserService.updateDiscoveryPreferences(jwt.getSubject(), request)
         ));
     }
 }

@@ -26,23 +26,27 @@ public class AuthSessionService {
     private final RefreshTokenProperties refreshTokenProperties;
     private final JwtService jwtService;
     private final Clock clock;
+    private final AccountSessionGate accounts;
 
     public AuthSessionService(
             AuthSessionRepository authSessionRepository,
             RefreshTokenCodec refreshTokenCodec,
             RefreshTokenProperties refreshTokenProperties,
             JwtService jwtService,
-            Clock clock
+            Clock clock,
+            AccountSessionGate accounts
     ) {
         this.authSessionRepository = authSessionRepository;
         this.refreshTokenCodec = refreshTokenCodec;
         this.refreshTokenProperties = refreshTokenProperties;
         this.jwtService = jwtService;
         this.clock = clock;
+        this.accounts = accounts;
     }
 
-    @Transactional
+    @Transactional(timeout = 5)
     public IssuedSession createSession(User user) {
+        accounts.validateNewSession(user);
         Instant now = clock.instant();
         UUID sessionId = UUID.randomUUID();
         RefreshTokenCodec.IssuedRefreshToken refreshToken = refreshTokenCodec.issue(sessionId);
@@ -62,11 +66,12 @@ public class AuthSessionService {
         );
     }
 
-    @Transactional
+    @Transactional(timeout = 5)
     public RefreshTokenResponse refresh(String rawRefreshToken) {
         UUID sessionId = parseSessionId(rawRefreshToken);
         Instant now = clock.instant();
 
+        accounts.lockSessionOwner(sessionId);
         AuthSession session = authSessionRepository.findByIdForUpdate(sessionId)
                 .orElseThrow(this::invalidRefreshToken);
 
@@ -94,7 +99,7 @@ public class AuthSessionService {
         );
     }
 
-    @Transactional
+    @Transactional(timeout = 5)
     public void logout(String rawRefreshToken) {
         UUID sessionId;
         try {
@@ -103,6 +108,12 @@ public class AuthSessionService {
             return;
         }
 
+        try {
+            accounts.lockSessionOwner(sessionId);
+        } catch (ApiException exception) {
+            if (exception.getErrorCode() == ErrorCode.INVALID_REFRESH_TOKEN) return;
+            throw exception;
+        }
         authSessionRepository.findByIdForUpdate(sessionId)
                 .filter(session -> refreshTokenCodec.matches(
                         rawRefreshToken,

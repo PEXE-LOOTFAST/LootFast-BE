@@ -12,6 +12,8 @@ public record OrderResponse(
     String dealName,
     int quantity,
     BigDecimal unitPrice,
+    BigDecimal originalUnitPrice,
+    BigDecimal savings,
     BigDecimal totalAmount,
     Instant pickupStart,
     Instant pickupEnd,
@@ -19,6 +21,10 @@ public record OrderResponse(
     PaymentMethod paymentMethod,
     PaymentStatus paymentStatus,
     String paymentReference,
+    Instant paymentReportedAt,
+    Instant paymentConfirmedAt,
+    String pickupCode,
+    String pickupQrPayload,
     Instant createdAt,
     Instant finalizedAt) {
   public static OrderResponse from(CustomerOrder o) {
@@ -29,6 +35,8 @@ public record OrderResponse(
         o.getDealName(),
         o.getQuantity(),
         o.getUnitPrice(),
+        o.getOriginalUnitPrice(),
+        o.getSavings(),
         o.getTotalAmount(),
         o.getPickupStart(),
         o.getPickupEnd(),
@@ -36,6 +44,10 @@ public record OrderResponse(
         o.getPaymentMethod(),
         o.getPaymentStatus(),
         o.getPaymentReference(),
+        o.getPaymentReportedAt(),
+        o.getPaymentConfirmedAt(),
+        o.getPickupCode(),
+        "lootfast://pickup/" + o.getPickupCode(),
         o.getCreatedAt(),
         o.getFinalizedAt());
   }

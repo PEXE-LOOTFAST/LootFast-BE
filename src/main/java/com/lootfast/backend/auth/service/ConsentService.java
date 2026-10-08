@@ -15,10 +15,12 @@ public class ConsentService {
 
     private final UserConsentRepository consentRepository;
     private final Clock clock;
+    private final com.lootfast.backend.content.service.LegalContentService legal;
 
-    public ConsentService(UserConsentRepository consentRepository, Clock clock) {
+    public ConsentService(UserConsentRepository consentRepository, Clock clock, com.lootfast.backend.content.service.LegalContentService legal) {
         this.consentRepository = consentRepository;
         this.clock = clock;
+        this.legal = legal;
     }
 
     public void recordRequiredConsents(
@@ -26,6 +28,8 @@ public class ConsentService {
             String termsVersion,
             String privacyPolicyVersion
     ) {
+        legal.requireCurrentConsent(ConsentDocument.TERMS_OF_USE, termsVersion);
+        legal.requireCurrentConsent(ConsentDocument.PRIVACY_POLICY, privacyPolicyVersion);
         Instant acceptedAt = clock.instant();
         consentRepository.saveAll(List.of(
                 new UserConsent(

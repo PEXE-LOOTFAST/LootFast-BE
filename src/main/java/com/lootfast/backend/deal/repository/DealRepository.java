@@ -18,9 +18,6 @@ import java.util.UUID;
 public interface DealRepository extends JpaRepository<Deal, Long> {
     Optional<Deal> findByPublicId(UUID publicId);
 
-    // PostgreSQL treats repeated named parameters as separate bind slots. Cast
-    // nullable guards explicitly; otherwise IS NULL / LIKE can be unknown/bytea.
-    // Timestamp casts are only in null guards; comparisons retain Instant binding.
     @Query("""
             select deal
             from Deal deal
@@ -90,6 +87,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
             join fetch deal.merchant merchant
             join fetch merchant.user merchantUser
             where deal.status = :status
+              and merchantUser.lockedAt is null
               and deal.remainingQuantity > 0
               and deal.availableFrom <= :now
               and deal.availableUntil > :now
@@ -104,6 +102,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
                    or deal.searchName like concat('%', cast(:searchTerm as String), '%')
                    or merchant.searchName like concat('%', cast(:searchTerm as String), '%'))
               and merchant.storeName is not null
+              and (merchant.suspendedUntil is null or merchant.suspendedUntil <= :now)
               and merchant.latitude between :minLatitude and :maxLatitude
               and (
                     (:crossesDateLine = false
@@ -134,6 +133,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
             join fetch deal.merchant merchant
             join fetch merchant.user merchantUser
             where deal.publicId = :publicId
+              and merchantUser.lockedAt is null
               and deal.status in :statuses
               and deal.availableFrom <= :now
               and deal.availableUntil > :now
@@ -141,6 +141,7 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
               and merchant.storeName is not null
               and merchant.latitude is not null
               and merchant.longitude is not null
+              and (merchant.suspendedUntil is null or merchant.suspendedUntil <= :now)
             """)
     Optional<Deal> findPublicDeal(
             @Param("publicId") UUID publicId,
@@ -155,21 +156,25 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
                     join fetch deal.merchant merchant
                     join fetch merchant.user merchantUser
                     where merchant.id = :merchantProfileId
+                      and merchantUser.lockedAt is null
                       and deal.status = :status
                       and deal.remainingQuantity > 0
                       and deal.availableFrom <= :now
                       and deal.availableUntil > :now
                       and deal.pickupEnd > :now
+                      and (merchant.suspendedUntil is null or merchant.suspendedUntil <= :now)
                     """,
             countQuery = """
                     select count(deal)
                     from Deal deal
                     where deal.merchant.id = :merchantProfileId
+                      and deal.merchant.user.lockedAt is null
                       and deal.status = :status
                       and deal.remainingQuantity > 0
                       and deal.availableFrom <= :now
                       and deal.availableUntil > :now
                       and deal.pickupEnd > :now
+                      and (deal.merchant.suspendedUntil is null or deal.merchant.suspendedUntil <= :now)
                     """
     )
     Page<Deal> findPublicStoreDeals(

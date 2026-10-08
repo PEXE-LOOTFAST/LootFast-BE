@@ -30,6 +30,7 @@ import java.time.LocalTime;
 import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,6 +94,7 @@ class PublicStoreServiceIntegrationTests {
 
     @Test
     void publicProfileContainsOpeningHoursCurrentDealsAndEmptyRatingSummary() {
+        store.markVerified(NOW);
         PublicStoreProfileResponse response = publicStoreService.getStore(
                 merchant.getPublicId(),
                 10.7768,
@@ -112,8 +114,21 @@ class PublicStoreServiceIntegrationTests {
         assertEquals(0, response.rating().reviewCount());
     }
 
+    @Test
+    void publicProfileDoesNotClaimUnapprovedStoreIsVerified() {
+        PublicStoreProfileResponse response = publicStoreService.getStore(
+                merchant.getPublicId(),
+                null,
+                null,
+                0,
+                20
+        );
+
+        assertFalse(response.verified());
+    }
+
     private void createDeal(String name, DealStatus status, int quantity) {
-        dealRepository.save(new Deal(
+        Deal deal = new Deal(
                 store,
                 name,
                 "MEAL",
@@ -126,8 +141,12 @@ class PublicStoreServiceIntegrationTests {
                 NOW.plusSeconds(7_200),
                 NOW.minusSeconds(3_600),
                 NOW.plusSeconds(7_200),
-                status
-        ));
+                status == DealStatus.HIDDEN ? DealStatus.ACTIVE : status
+        );
+        if (status == DealStatus.HIDDEN) {
+            deal.hide(NOW);
+        }
+        dealRepository.save(deal);
     }
 
     @TestConfiguration

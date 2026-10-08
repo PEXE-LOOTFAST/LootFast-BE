@@ -34,7 +34,7 @@ public class DealResponseMapper {
                         merchant.getWard(),
                         merchant.getDistrict(),
                         merchant.getCity(),
-                        true
+                        merchant.isVerified()
                 )
         );
     }
@@ -68,7 +68,7 @@ public class DealResponseMapper {
                         merchant.getWard(),
                         merchant.getDistrict(),
                         merchant.getCity(),
-                        true
+                        merchant.isVerified()
                 )
         );
     }

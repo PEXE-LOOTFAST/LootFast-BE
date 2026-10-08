@@ -110,7 +110,7 @@ public class MerchantApplicationReviewService {
         MerchantApplication application = locked.application();
 
         if (application.getStatus() == MerchantApplicationStatus.APPROVED) {
-            ensureMerchantAccess(locked.applicant());
+            ensureMerchantAccess(locked.applicant(), application.getReviewedAt());
             return MerchantApplicationResponse.from(application);
         }
         requirePending(application);
@@ -121,8 +121,9 @@ public class MerchantApplicationReviewService {
             );
         }
 
-        ensureMerchantAccess(locked.applicant());
-        application.approve(admin, Instant.now());
+        Instant approvedAt = Instant.now();
+        ensureMerchantAccess(locked.applicant(), approvedAt);
+        application.approve(admin, approvedAt);
         return MerchantApplicationResponse.from(application);
     }
 
@@ -163,11 +164,12 @@ public class MerchantApplicationReviewService {
         return new LockedApplication(applicant, application);
     }
 
-    private void ensureMerchantAccess(User applicant) {
+    private void ensureMerchantAccess(User applicant, Instant approvedAt) {
         applicant.addRole(UserRole.MERCHANT);
-        if (!merchantProfileRepository.existsByUserId(applicant.getId())) {
-            merchantProfileRepository.save(new MerchantProfile(applicant));
-        }
+        MerchantProfile profile = merchantProfileRepository.findByUserId(applicant.getId())
+                .orElseGet(() -> new MerchantProfile(applicant));
+        profile.markVerified(approvedAt);
+        merchantProfileRepository.save(profile);
     }
 
     private User requireAdmin(String subject) {

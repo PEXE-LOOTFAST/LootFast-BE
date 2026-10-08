@@ -8,6 +8,8 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
+import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -74,6 +76,91 @@ class BrevoEmailSenderTests {
 
         assertDoesNotThrow(() -> sender.sendPasswordResetOtp("user@example.com", "123456"));
 
+        server.verify();
+    }
+
+    @Test
+    void sendsMatchingDealEmailWithStableNotificationKeyAndEscapedContent() {
+        UUID notificationId = UUID.randomUUID();
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.to[0].email").value("buyer@example.com"))
+                .andExpect(jsonPath("$.subject").value("LootFast — Deal phù hợp dành cho bạn"))
+                .andExpect(jsonPath("$.headers.idempotencyKey").value(notificationId.toString()))
+                .andExpect(jsonPath("$.htmlContent").value(
+                        org.hamcrest.Matchers.containsString("Bread &amp; Soup")
+                ))
+                .andExpect(jsonPath("$.htmlContent").value(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("<script>"))
+                ))
+                .andRespond(withSuccess(
+                        "{\"messageId\":\"<matching-deal@brevo>\"}",
+                        MediaType.APPLICATION_JSON
+                ));
+
+        sender.sendMatchingDeal(
+                "buyer@example.com",
+                notificationId,
+                "Bread & Soup",
+                "<script>Store</script>",
+                BigDecimal.valueOf(100_000),
+                BigDecimal.valueOf(40_000)
+        );
+
+        server.verify();
+    }
+    @Test
+    void sendsOrderEmailWithEscapedContentAndStableKey() {
+        UUID id = UUID.randomUUID();
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andExpect(jsonPath("$.headers.idempotencyKey").value(id.toString()))
+                .andExpect(jsonPath("$.htmlContent").value(
+                        org.hamcrest.Matchers.containsString("&lt;script&gt;")))
+                .andRespond(withSuccess("{\"messageId\":\"order-message\"}", MediaType.APPLICATION_JSON));
+        sender.sendOrderNotification("buyer@example.com", id, "Order update", "<script>Meal</script>");
+        server.verify();
+    }
+    @Test
+    void queuedEmailReportsAcceptanceSynchronously() {
+        UUID id=UUID.randomUUID();
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andExpect(jsonPath("$.headers.idempotencyKey").value(id.toString()))
+                .andRespond(withSuccess("{\"messageId\":\"queued-message\"}", MediaType.APPLICATION_JSON));
+        org.junit.jupiter.api.Assertions.assertEquals(EmailDeliveryResult.Outcome.ACCEPTED,
+                sender.sendQueuedEmail("buyer@example.com", id, "Order", "<p>Order</p>").outcome());
+        server.verify();
+    }
+
+    @Test
+    void queuedEmailReturnsRetryAfterOnRateLimitWithoutInternalRetry() {
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
+                        .withStatus(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", "90"));
+        var result=sender.sendQueuedEmail("buyer@example.com", UUID.randomUUID(), "Order", "<p>Order</p>");
+        org.junit.jupiter.api.Assertions.assertEquals(EmailDeliveryResult.Outcome.RETRYABLE,result.outcome());
+        org.junit.jupiter.api.Assertions.assertEquals(Duration.ofSeconds(90),result.retryAfter());
+        server.verify();
+    }
+
+    @Test
+    void queuedEmailTreatsDuplicateIdempotencyKeyAsAlreadyAccepted() {
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andRespond(withBadRequest().body("{\"code\":\"duplicate_parameter\",\"message\":\"Email for the idempotency key has already been processed\"}")
+                        .contentType(MediaType.APPLICATION_JSON));
+        org.junit.jupiter.api.Assertions.assertEquals(EmailDeliveryResult.Outcome.ACCEPTED,
+                sender.sendQueuedEmail("buyer@example.com",UUID.randomUUID(),"Order","<p>Order</p>").outcome());
+        server.verify();
+    }
+
+    @Test
+    void queuedEmailClassifiesPermanentAndServerErrors() {
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email")).andRespond(withBadRequest());
+        server.expect(requestTo("https://api.brevo.com/v3/smtp/email"))
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withServerError());
+        org.junit.jupiter.api.Assertions.assertEquals(EmailDeliveryResult.Outcome.PERMANENT_FAILURE,
+                sender.sendQueuedEmail("buyer@example.com",UUID.randomUUID(),"Order","<p>Order</p>").outcome());
+        org.junit.jupiter.api.Assertions.assertEquals(EmailDeliveryResult.Outcome.RETRYABLE,
+                sender.sendQueuedEmail("buyer@example.com",UUID.randomUUID(),"Order","<p>Order</p>").outcome());
         server.verify();
     }
 }

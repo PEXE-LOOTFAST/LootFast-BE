@@ -47,8 +47,9 @@ public class SocialLoginTransactionService {
                 .findByProviderAndProviderSubject(identity.provider(), identity.subject())
                 .orElse(null);
         if (existingIdentity != null) {
-            existingIdentity.recordLogin(identity.email(), clock.instant());
             User user = existingIdentity.getUser();
+            if (user.isLocked()) throw new ApiException(ErrorCode.ACCOUNT_LOCKED);
+            existingIdentity.recordLogin(identity.email(), clock.instant());
             user.getRoles();
             return user;
         }
@@ -64,6 +65,7 @@ public class SocialLoginTransactionService {
             );
         }
 
+        if (user.isLocked()) throw new ApiException(ErrorCode.ACCOUNT_LOCKED);
         identityRepository.saveAndFlush(new ExternalAuthIdentity(
                 user,
                 identity.provider(),
