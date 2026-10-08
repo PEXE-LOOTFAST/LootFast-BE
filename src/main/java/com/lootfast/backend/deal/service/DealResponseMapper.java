@@ -4,6 +4,7 @@ import com.lootfast.backend.deal.dto.DealDetailResponse;
 import com.lootfast.backend.deal.dto.DealFeedItemResponse;
 import com.lootfast.backend.deal.entity.Deal;
 import com.lootfast.backend.merchant.entity.MerchantProfile;
+import com.lootfast.backend.review.service.StoreRatingService;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -11,6 +12,11 @@ import java.math.RoundingMode;
 
 @Component
 public class DealResponseMapper {
+    private final StoreRatingService reviews;
+
+    public DealResponseMapper(StoreRatingService reviews) {
+        this.reviews = reviews;
+    }
 
     public DealFeedItemResponse toFeedItem(Deal deal, BigDecimal distanceKm) {
         MerchantProfile merchant = deal.getMerchant();
@@ -41,6 +47,7 @@ public class DealResponseMapper {
 
     public DealDetailResponse toDetail(Deal deal, BigDecimal distanceKm) {
         MerchantProfile merchant = deal.getMerchant();
+        var rating = reviews.get(merchant.getId());
         return new DealDetailResponse(
                 deal.getPublicId(),
                 deal.getName(),
@@ -59,7 +66,7 @@ public class DealResponseMapper {
                 distanceKm,
                 deal.getVersion(),
                 deal.getUpdatedAt(),
-                new DealDetailResponse.RatingSummary(null, 0),
+                new DealDetailResponse.RatingSummary(rating.averageRating(), rating.reviewCount()),
                 new DealDetailResponse.MerchantDetail(
                         merchant.getUser().getPublicId(),
                         merchant.getStoreName(),

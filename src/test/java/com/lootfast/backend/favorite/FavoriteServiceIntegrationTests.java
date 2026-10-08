@@ -39,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Import({
         FavoriteService.class,
         DealResponseMapper.class,
+        com.lootfast.backend.review.service.StoreRatingService.class,
         FavoriteServiceIntegrationTests.FixedClockConfig.class
 })
 class FavoriteServiceIntegrationTests {

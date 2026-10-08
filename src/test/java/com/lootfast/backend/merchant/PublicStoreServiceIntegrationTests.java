@@ -38,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Import({
         PublicStoreService.class,
         DealResponseMapper.class,
+        com.lootfast.backend.review.service.StoreRatingService.class,
         PublicStoreServiceIntegrationTests.FixedClockConfig.class
 })
 class PublicStoreServiceIntegrationTests {
