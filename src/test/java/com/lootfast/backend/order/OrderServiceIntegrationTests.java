@@ -102,6 +102,39 @@ class OrderServiceIntegrationTests {
   }
 
   @Test
+  void buyerChosenPickupSlotIsStoredWhenInsideWindowAndRejectedOutside() {
+    Deal deal =
+        deal(
+            "Meal",
+            10,
+            NOW.minusSeconds(60),
+            NOW.plusSeconds(7200),
+            NOW.plusSeconds(3600),
+            NOW.plusSeconds(7200));
+    Instant from = NOW.plusSeconds(4200); // khoảng con trong khung [+3600, +7200]
+    Instant to = NOW.plusSeconds(6000);
+    OrderResponse response =
+        service.reserve(
+            buyer.getId().toString(),
+            UUID.randomUUID(),
+            new CreateOrderRequest(deal.getPublicId(), 1, PaymentMethod.CASH, from, to));
+    assertEquals(from, response.pickupFrom());
+    assertEquals(to, response.pickupTo());
+
+    // pickupTo vượt khung pickup của deal -> bị từ chối.
+    ApiException outside =
+        assertThrows(
+            ApiException.class,
+            () ->
+                service.reserve(
+                    buyer.getId().toString(),
+                    UUID.randomUUID(),
+                    new CreateOrderRequest(
+                        deal.getPublicId(), 1, PaymentMethod.CASH, from, NOW.plusSeconds(8000))));
+    assertEquals(ErrorCode.ORDER_PICKUP_TIME_INVALID, outside.getErrorCode());
+  }
+
+  @Test
   void limitsFiveUncollectedPortionsAcrossOrdersAndThreeReservedOrdersOverall() {
     Deal deal =
         deal(
@@ -138,7 +171,8 @@ class OrderServiceIntegrationTests {
   }
 
   @Test
-  void rejectsAtTheFifteenMinuteCutoffWithoutChangingStock() {
+  void allowsReservationCloseToPickupAfterCutoffRemoved() {
+    // Không còn luật cutoff 15 phút: đặt sát giờ pickup vẫn thành công, miễn deal còn đang bán.
     Instant pickup = NOW.plusSeconds(900);
     Deal deal =
         deal(
@@ -148,10 +182,10 @@ class OrderServiceIntegrationTests {
             NOW.plusSeconds(3600),
             pickup,
             pickup.plusSeconds(1800));
-    ApiException exception = assertThrows(ApiException.class, () -> reserve(deal, 1));
-    assertEquals(ErrorCode.ORDER_CUTOFF_REACHED, exception.getErrorCode());
-    assertEquals(3, deals.findByPublicId(deal.getPublicId()).orElseThrow().getRemainingQuantity());
-    assertEquals(0, orders.count());
+    OrderResponse order = reserve(deal, 1);
+    assertEquals(OrderStatus.RESERVED, order.orderStatus());
+    assertEquals(2, deals.findByPublicId(deal.getPublicId()).orElseThrow().getRemainingQuantity());
+    assertEquals(1, orders.count());
   }
 
   @Test

@@ -70,6 +70,14 @@ public class CustomerOrder {
   @Column(name = "pickup_end", nullable = false, updatable = false)
   private Instant pickupEnd;
 
+  // Khoảng giờ khách hẹn đến lấy, luôn nằm trong [pickupStart, pickupEnd] của deal. Đây là căn cứ
+  // cho huỷ (trước pickupFrom 30') và no-show (sau pickupTo 30').
+  @Column(name = "pickup_from", nullable = false, updatable = false)
+  private Instant pickupFrom;
+
+  @Column(name = "pickup_to", nullable = false, updatable = false)
+  private Instant pickupTo;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 24)
   private OrderStatus status;
@@ -134,6 +142,7 @@ public class CustomerOrder {
 
   protected CustomerOrder() {}
 
+  /** Giữ chữ ký cũ cho các lời gọi không chọn khoảng giờ: mặc định cả khung pickup của deal. */
   public CustomerOrder(
       User buyer,
       Deal deal,
@@ -142,6 +151,19 @@ public class CustomerOrder {
       UUID key,
       String fingerprint,
       Instant now) {
+    this(buyer, deal, quantity, method, key, fingerprint, now, deal.getPickupStart(), deal.getPickupEnd());
+  }
+
+  public CustomerOrder(
+      User buyer,
+      Deal deal,
+      int quantity,
+      PaymentMethod method,
+      UUID key,
+      String fingerprint,
+      Instant now,
+      Instant pickupFrom,
+      Instant pickupTo) {
     this.publicId = UUID.randomUUID();
     this.buyer = buyer;
     this.deal = deal;
@@ -153,6 +175,8 @@ public class CustomerOrder {
     this.totalAmount = unitPrice.multiply(BigDecimal.valueOf(quantity));
     this.pickupStart = deal.getPickupStart();
     this.pickupEnd = deal.getPickupEnd();
+    this.pickupFrom = pickupFrom;
+    this.pickupTo = pickupTo;
     this.status = OrderStatus.RESERVED;
     this.paymentStatus = PaymentStatus.UNPAID;
     this.paymentMethod = method;
@@ -318,6 +342,14 @@ public class CustomerOrder {
 
   public Instant getPickupEnd() {
     return pickupEnd;
+  }
+
+  public Instant getPickupFrom() {
+    return pickupFrom;
+  }
+
+  public Instant getPickupTo() {
+    return pickupTo;
   }
 
   public OrderStatus getStatus() {

@@ -103,7 +103,7 @@ public interface OrderRepository extends JpaRepository<CustomerOrder, Long> {
   @Query(
       "select o.publicId from CustomerOrder o where"
           + " o.status=com.lootfast.backend.order.entity.OrderStatus.RESERVED"
-          + " and o.pickupEnd < :cutoff")
+          + " and o.pickupTo < :cutoff")
   List<UUID> findNoShowCandidates(Instant cutoff);
 
   @Query(

@@ -170,14 +170,13 @@ class MerchantDealServiceIntegrationTests {
         var request = validRequest("Custom deal");
         var draft = dealService.create(subject(), new CreateMerchantDealRequest(request.name(), code,
                 request.originalPrice(), request.discountedPrice(), request.totalQuantity(),
-                request.preparationMinutes(), request.saleStartsAt(), request.saleEndsAt(),
-                request.pickupStartsAt(), request.pickupEndsAt()));
+                request.preparationMinutes(), request.saleStartsAt(), request.saleEndsAt()));
         var template = templateService.save(subject(), draft.dealId());
         categories.edit(admin.getId().toString(), code,
                 new com.lootfast.backend.content.dto.ContentRequests.CategoryEdit("Custom", false, 0, category.revision()));
         assertEquals(code, dealRepository.findByPublicId(draft.dealId()).orElseThrow().getCategoryCode());
         var failure = assertThrows(ApiException.class, () -> templateService.reuse(subject(), template.templateId(),
-                new ReuseDealTemplateRequest(10, SALE_START, SALE_END, PICKUP_START, PICKUP_END)));
+                new ReuseDealTemplateRequest(10, SALE_START, SALE_END)));
         assertEquals(ErrorCode.CATEGORY_UNAVAILABLE, failure.getErrorCode());
     }
 
@@ -216,28 +215,25 @@ class MerchantDealServiceIntegrationTests {
     }
 
     @Test
-    void publishedDealsForSameDayMustShareSchedule() throws Exception {
+    void publishedDealsForSameDayMayUseDifferentSchedules() throws Exception {
         MerchantDealResponse first = createWithImage(validRequest("First deal"));
         dealService.publish(subject(), first.dealId());
 
-        CreateMerchantDealRequest conflicting = new CreateMerchantDealRequest(
+        // Cùng ngày nhưng khung bán/lấy buổi chiều hoàn toàn khác deal đầu — phải publish được,
+        // mỗi deal tự do chọn giờ bán của mình (vẫn trong 1 ngày lịch VN và trong giờ mở cửa).
+        CreateMerchantDealRequest afternoon = new CreateMerchantDealRequest(
                 "Second deal",
                 "BAKERY",
                 BigDecimal.valueOf(100_000),
                 BigDecimal.valueOf(50_000),
                 10,
                 10,
-                SALE_START.plusSeconds(1800),
-                SALE_END,
-                PICKUP_START,
-                PICKUP_END
+                Instant.parse("2030-01-02T10:00:00Z"),
+                Instant.parse("2030-01-02T12:00:00Z")
         );
-        MerchantDealResponse second = createWithImage(conflicting);
-        ApiException exception = assertThrows(
-                ApiException.class,
-                () -> dealService.publish(subject(), second.dealId())
-        );
-        assertEquals(ErrorCode.STORE_SCHEDULE_CONFLICT, exception.getErrorCode());
+        MerchantDealResponse second = createWithImage(afternoon);
+        MerchantDealResponse published = dealService.publish(subject(), second.dealId());
+        assertEquals(DealStatus.ACTIVE, published.status());
     }
 
     @Test
@@ -281,9 +277,7 @@ class MerchantDealServiceIntegrationTests {
                 10,
                 10,
                 SALE_START,
-                SALE_END,
-                PICKUP_START,
-                PICKUP_END
+                SALE_END
         );
         ApiException exception = assertThrows(
                 ApiException.class,
@@ -319,9 +313,7 @@ class MerchantDealServiceIntegrationTests {
                 new ReuseDealTemplateRequest(
                         7,
                         Instant.parse("2030-01-03T01:00:00Z"),
-                        Instant.parse("2030-01-03T08:00:00Z"),
-                        Instant.parse("2030-01-03T09:00:00Z"),
-                        Instant.parse("2030-01-03T10:00:00Z")
+                        Instant.parse("2030-01-03T08:00:00Z")
                 )
         );
 
@@ -406,9 +398,7 @@ class MerchantDealServiceIntegrationTests {
                 10,
                 10,
                 SALE_START,
-                SALE_END,
-                PICKUP_START,
-                PICKUP_END
+                SALE_END
         );
     }
 

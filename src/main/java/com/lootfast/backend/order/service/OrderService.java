@@ -91,7 +91,15 @@ public class OrderService {
     if (buyer.isLocked()) throw error(ErrorCode.ACCOUNT_LOCKED, "Account is locked");
     requireBuyer(buyer);
     String fingerprint =
-        request.dealId() + ":" + request.quantity() + ":" + request.paymentMethod();
+        request.dealId()
+            + ":"
+            + request.quantity()
+            + ":"
+            + request.paymentMethod()
+            + ":"
+            + request.pickupFrom()
+            + ":"
+            + request.pickupTo();
     var existing = orders.findByBuyerIdAndReservationKey(buyer.getId(), key);
     if (existing.isPresent()) {
       CustomerOrder original = existing.get();
@@ -128,26 +136,17 @@ public class OrderService {
         || now.isBefore(deal.getAvailableFrom())
         || !now.isBefore(deal.getAvailableUntil()))
       throw error(ErrorCode.DEAL_NOT_RESERVABLE, "Deal is not on sale");
-    if (!now.isBefore(deal.getPickupStart().minusSeconds(900)))
+    // Khách hẹn một khoảng giờ đến lấy nằm trong khung pickup của deal; mặc định cả khung nếu
+    // không gửi (lời gọi nội bộ/test). Không còn luật cutoff 15 phút: đặt được đến sát giờ,
+    // miễn deal còn đang bán.
+    Instant pickupFrom = request.pickupFrom() == null ? deal.getPickupStart() : request.pickupFrom();
+    Instant pickupTo = request.pickupTo() == null ? deal.getPickupEnd() : request.pickupTo();
+    if (!pickupFrom.isBefore(pickupTo)
+        || pickupFrom.isBefore(deal.getPickupStart())
+        || pickupTo.isAfter(deal.getPickupEnd()))
       throw error(
-          ErrorCode.ORDER_CUTOFF_REACHED, "Reservations close 15 minutes before pickup starts");
-    var day = deal.getAvailableFrom().atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toLocalDate();
-    Instant dayStart = day.atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
-    Instant dayEnd = day.plusDays(1).atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
-    if (deals.countScheduleConflicts(
-            deal.getMerchant().getId(),
-            deal.getPublicId(),
-            java.util.Set.of(DealStatus.ACTIVE, DealStatus.HIDDEN, DealStatus.SOLD_OUT),
-            dayStart,
-            dayEnd,
-            deal.getAvailableFrom(),
-            deal.getAvailableUntil(),
-            deal.getPickupStart(),
-            deal.getPickupEnd())
-        > 0)
-      throw error(
-          ErrorCode.STORE_SCHEDULE_CONFLICT,
-          "Store must use one sale and one pickup window per day");
+          ErrorCode.ORDER_PICKUP_TIME_INVALID,
+          "Pickup slot must be a valid interval inside the deal pickup window");
     if (orders.countByBuyerIdAndStatus(buyer.getId(), OrderStatus.RESERVED) >= 3)
       throw error(ErrorCode.RESERVED_ORDER_LIMIT, "At most 3 reserved orders are allowed");
     if (orders.reservedQuantity(buyer.getId(), request.dealId()) + request.quantity() > 5)
@@ -161,7 +160,8 @@ public class OrderService {
       throw error(ErrorCode.INSUFFICIENT_STOCK, "Not enough portions remain");
     CustomerOrder order =
         new CustomerOrder(
-            buyer, deal, request.quantity(), request.paymentMethod(), key, fingerprint, now);
+            buyer, deal, request.quantity(), request.paymentMethod(), key, fingerprint, now,
+            pickupFrom, pickupTo);
     var bank = banks.findByMerchantUserId(deal.getMerchant().getUser().getId());
     bank.ifPresent(
         b ->
@@ -197,9 +197,10 @@ public class OrderService {
           ErrorCode.PAYMENT_STATE_CONFLICT,
           "Reported or confirmed payments require merchant support before cancellation");
     Instant now = clock.instant();
-    if (!now.isBefore(order.getPickupStart().minusSeconds(1800)))
+    if (!now.isBefore(order.getPickupFrom().minusSeconds(1800)))
       throw error(
-          ErrorCode.ORDER_CANCEL_WINDOW_CLOSED, "Cancel at least 30 minutes before pickup starts");
+          ErrorCode.ORDER_CANCEL_WINDOW_CLOSED,
+          "Cancel at least 30 minutes before your pickup slot starts");
     Deal deal =
         deals
             .findReservationForUpdate(order.getDeal().getPublicId())
@@ -222,7 +223,7 @@ public class OrderService {
     CustomerOrder order = orders.findForUpdate(orderId).orElse(null);
     if (order == null || order.getStatus() != OrderStatus.RESERVED) return;
     Instant now = clock.instant();
-    if (now.isBefore(order.getPickupEnd().plusSeconds(1800))) return;
+    if (now.isBefore(order.getPickupTo().plusSeconds(1800))) return;
     Deal deal =
         deals
             .findReservationForUpdate(order.getDeal().getPublicId())
