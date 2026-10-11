@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         DealFeedService.class,
         DealDetailService.class,
         DealResponseMapper.class,
+        com.lootfast.backend.review.service.StoreRatingService.class,
         DealFeedIntegrationTests.FixedClockConfig.class
 })
 class DealFeedIntegrationTests {

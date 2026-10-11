@@ -5,7 +5,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @Configuration
 public class SavedFilterSchedulingConfig {
-  @Bean("savedFilterNotificationScheduler")
+  @Bean("savedFilterNotificationTaskScheduler")
   ThreadPoolTaskScheduler scheduler() {
     var scheduler = new ThreadPoolTaskScheduler();
     scheduler.setPoolSize(1);

@@ -14,6 +14,7 @@ import com.lootfast.backend.merchant.entity.MerchantOpeningHour;
 import com.lootfast.backend.merchant.entity.MerchantProfile;
 import com.lootfast.backend.merchant.repository.MerchantOpeningHourRepository;
 import com.lootfast.backend.merchant.repository.MerchantProfileRepository;
+import com.lootfast.backend.review.service.StoreRatingService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -38,19 +39,22 @@ public class PublicStoreService {
     private final DealRepository dealRepository;
     private final DealResponseMapper dealResponseMapper;
     private final Clock clock;
+    private final StoreRatingService reviews;
 
     public PublicStoreService(
             MerchantProfileRepository merchantProfileRepository,
             MerchantOpeningHourRepository openingHourRepository,
             DealRepository dealRepository,
             DealResponseMapper dealResponseMapper,
-            Clock clock
+            Clock clock,
+            StoreRatingService reviews
     ) {
         this.merchantProfileRepository = merchantProfileRepository;
         this.openingHourRepository = openingHourRepository;
         this.dealRepository = dealRepository;
         this.dealResponseMapper = dealResponseMapper;
         this.clock = clock;
+        this.reviews = reviews;
     }
 
     @Transactional(readOnly = true)
@@ -108,10 +112,15 @@ public class PublicStoreService {
                         profile.getLongitude()
                 ),
                 profile.isVerified(),
-                new PublicStoreProfileResponse.RatingSummary(null, 0),
+                rating(profile.getId()),
                 openingHours,
                 PagedResponse.from(deals)
         );
+    }
+
+    private PublicStoreProfileResponse.RatingSummary rating(Long merchantId) {
+        var summary = reviews.get(merchantId);
+        return new PublicStoreProfileResponse.RatingSummary(summary.averageRating(), summary.reviewCount());
     }
 
     private BigDecimal distance(

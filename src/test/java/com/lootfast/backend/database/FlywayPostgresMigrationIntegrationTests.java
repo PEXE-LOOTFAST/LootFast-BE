@@ -10,6 +10,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.sql.DriverManager;
+import java.time.Duration;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,7 +31,13 @@ class FlywayPostgresMigrationIntegrationTests {
             .withEnv("POSTGRES_USER", USERNAME)
             .withEnv("POSTGRES_PASSWORD", PASSWORD)
             .withExposedPorts(5432)
-            .waitingFor(Wait.forListeningPort());
+            // Probe the actual test database over TCP. PostgreSQL's temporary init server
+            // uses a Unix socket, so it must not satisfy this readiness check.
+            .waitingFor(Wait.forSuccessfulCommand(
+                    "PGPASSWORD=" + PASSWORD + " PGCONNECT_TIMEOUT=2 psql"
+                            + " -h 127.0.0.1 -U " + USERNAME + " -d " + DATABASE
+                            + " --no-password -v ON_ERROR_STOP=1 -tAc 'SELECT 1'"
+            ).withStartupTimeout(Duration.ofSeconds(60)));
 
     @Test
     void latestMigrationsUpgradeADataBearingV10Database() throws Exception {
