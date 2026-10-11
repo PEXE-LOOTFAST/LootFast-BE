@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -36,7 +35,6 @@ import java.time.ZoneId;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -44,12 +42,6 @@ import java.util.stream.Collectors;
 public class MerchantDealService {
 
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-    private static final Duration ORDER_CUTOFF = Duration.ofMinutes(15);
-    private static final Set<DealStatus> PUBLISHED_STATUSES = Set.of(
-            DealStatus.ACTIVE,
-            DealStatus.HIDDEN,
-            DealStatus.SOLD_OUT
-    );
 
     private final MerchantDealAccess access;
     private final MerchantProfileRepository merchantRepository;
@@ -104,10 +96,10 @@ public class MerchantDealService {
                 normalized.totalQuantity(),
                 null,
                 normalized.preparationMinutes(),
-                normalized.pickupStartsAt(),
-                normalized.pickupEndsAt(),
-                normalized.saleStartsAt(),
-                normalized.saleEndsAt(),
+                normalized.openFrom(),
+                normalized.openUntil(),
+                normalized.openFrom(),
+                normalized.openUntil(),
                 DealStatus.DRAFT
         ));
         return MerchantDealResponse.from(deal, List.of());
@@ -138,10 +130,10 @@ public class MerchantDealService {
                 normalized.discountedPrice(),
                 normalized.totalQuantity(),
                 normalized.preparationMinutes(),
-                normalized.pickupStartsAt(),
-                normalized.pickupEndsAt(),
-                normalized.saleStartsAt(),
-                normalized.saleEndsAt()
+                normalized.openFrom(),
+                normalized.openUntil(),
+                normalized.openFrom(),
+                normalized.openUntil()
         );
         dealRepository.flush();
         return response(deal);
@@ -301,12 +293,7 @@ public class MerchantDealService {
                     "Discounted price must be at least 10% below the original price"
             );
         }
-        validateSchedule(
-                request.saleStartsAt(),
-                request.saleEndsAt(),
-                request.pickupStartsAt(),
-                request.pickupEndsAt()
-        );
+        validateSchedule(request.saleStartsAt(), request.saleEndsAt());
         return new NormalizedDeal(
                 request.name().trim(),
                 request.categoryCode().trim().toUpperCase(java.util.Locale.ROOT),
@@ -315,9 +302,7 @@ public class MerchantDealService {
                 request.totalQuantity(),
                 request.preparationMinutes(),
                 request.saleStartsAt(),
-                request.saleEndsAt(),
-                request.pickupStartsAt(),
-                request.pickupEndsAt()
+                request.saleEndsAt()
         );
     }
 
@@ -329,27 +314,18 @@ public class MerchantDealService {
         }
     }
 
-    private void validateSchedule(
-            Instant saleStart,
-            Instant saleEnd,
-            Instant pickupStart,
-            Instant pickupEnd
-    ) {
-        if (!saleStart.isBefore(saleEnd)
-                || !pickupStart.isBefore(pickupEnd)
-                || saleEnd.isAfter(pickupStart.minus(ORDER_CUTOFF))) {
+    private void validateSchedule(Instant openFrom, Instant openUntil) {
+        if (!openFrom.isBefore(openUntil)) {
             throw new ApiException(
                     ErrorCode.INVALID_DEAL_SCHEDULE,
-                    "Sale must end at least 15 minutes before pickup starts"
+                    "Deal open time must be before its close time"
             );
         }
-        LocalDate businessDate = saleStart.atZone(BUSINESS_ZONE).toLocalDate();
-        if (!businessDate.equals(saleEnd.atZone(BUSINESS_ZONE).toLocalDate())
-                || !businessDate.equals(pickupStart.atZone(BUSINESS_ZONE).toLocalDate())
-                || !businessDate.equals(pickupEnd.atZone(BUSINESS_ZONE).toLocalDate())) {
+        LocalDate businessDate = openFrom.atZone(BUSINESS_ZONE).toLocalDate();
+        if (!businessDate.equals(openUntil.atZone(BUSINESS_ZONE).toLocalDate())) {
             throw new ApiException(
                     ErrorCode.INVALID_DEAL_SCHEDULE,
-                    "Sale and pickup windows must be within one Vietnam calendar day"
+                    "Deal open and close must be within one Vietnam calendar day"
             );
         }
     }
@@ -369,21 +345,15 @@ public class MerchantDealService {
 
     private List<DealImage> requireVisibleDealRules(MerchantProfile merchant, Deal deal) {
         requireCompleteProfile(merchant);
-        validateSchedule(
-                deal.getAvailableFrom(),
-                deal.getAvailableUntil(),
-                deal.getPickupStart(),
-                deal.getPickupEnd()
-        );
+        validateSchedule(deal.getAvailableFrom(), deal.getAvailableUntil());
         Instant now = clock.instant();
-        if (!now.isBefore(deal.getAvailableUntil()) || !now.isBefore(deal.getPickupStart())) {
+        if (!now.isBefore(deal.getAvailableUntil())) {
             throw new ApiException(
                     ErrorCode.INVALID_DEAL_SCHEDULE,
-                    "Sale and pickup windows must still be in the future"
+                    "Deal open window must still be in the future"
             );
         }
         requirePickupInsideOpeningHours(merchant, deal);
-        requireSharedDailySchedule(merchant, deal);
         List<DealImage> images = activeImages(deal.getId());
         if (images.isEmpty()) {
             throw new ApiException(
@@ -409,28 +379,6 @@ public class MerchantDealService {
             throw new ApiException(
                     ErrorCode.DEAL_OUTSIDE_OPENING_HOURS,
                     "Pickup window must be inside one store opening-hour slot"
-            );
-        }
-    }
-
-    private void requireSharedDailySchedule(MerchantProfile merchant, Deal deal) {
-        LocalDate date = deal.getAvailableFrom().atZone(BUSINESS_ZONE).toLocalDate();
-        Instant dayStart = date.atStartOfDay(BUSINESS_ZONE).toInstant();
-        Instant dayEnd = date.plusDays(1).atStartOfDay(BUSINESS_ZONE).toInstant();
-        if (dealRepository.countScheduleConflicts(
-                merchant.getId(),
-                deal.getPublicId(),
-                PUBLISHED_STATUSES,
-                dayStart,
-                dayEnd,
-                deal.getAvailableFrom(),
-                deal.getAvailableUntil(),
-                deal.getPickupStart(),
-                deal.getPickupEnd()
-        ) > 0) {
-            throw new ApiException(
-                    ErrorCode.STORE_SCHEDULE_CONFLICT,
-                    "All store deals for a day must share one sale and one pickup window"
             );
         }
     }
@@ -485,10 +433,8 @@ public class MerchantDealService {
             BigDecimal discountedPrice,
             int totalQuantity,
             int preparationMinutes,
-            Instant saleStartsAt,
-            Instant saleEndsAt,
-            Instant pickupStartsAt,
-            Instant pickupEndsAt
+            Instant openFrom,
+            Instant openUntil
     ) {
     }
 }

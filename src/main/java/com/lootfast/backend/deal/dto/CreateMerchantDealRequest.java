@@ -20,9 +20,8 @@ public record CreateMerchantDealRequest(
         BigDecimal discountedPrice,
         @Min(1) @Max(10000) int totalQuantity,
         @Min(0) @Max(1440) int preparationMinutes,
+        // Giờ mở bán và đóng deal (một khung). Buyer chọn giờ đến lấy nằm trong khoảng này.
         @NotNull Instant saleStartsAt,
-        @NotNull Instant saleEndsAt,
-        @NotNull Instant pickupStartsAt,
-        @NotNull Instant pickupEndsAt
+        @NotNull Instant saleEndsAt
 ) {
 }

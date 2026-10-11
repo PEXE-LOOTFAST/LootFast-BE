@@ -88,9 +88,7 @@ public class DealTemplateService {
             request.totalQuantity(),
             template.getPreparationMinutes(),
             request.saleStartsAt(),
-            request.saleEndsAt(),
-            request.pickupStartsAt(),
-            request.pickupEndsAt()));
+            request.saleEndsAt()));
   }
 
   @Transactional
