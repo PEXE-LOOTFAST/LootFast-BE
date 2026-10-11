@@ -63,14 +63,6 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
 
     @Query("select d.merchant.user.id from Deal d where d.publicId=:publicId")
     Optional<Long> findMerchantUserId(UUID publicId);
-    @Query("""
-        select count(d) from Deal d where d.merchant.id=:merchantId and d.publicId<>:dealPublicId
-        and d.status in :statuses and d.availableFrom>=:dayStart and d.availableFrom<:dayEnd
-        and (d.availableFrom<>:saleStart or d.availableUntil<>:saleEnd
-             or d.pickupStart<>:pickupStart or d.pickupEnd<>:pickupEnd)
-        """)
-    long countScheduleConflicts(Long merchantId, UUID dealPublicId, Set<DealStatus> statuses, Instant dayStart, Instant dayEnd,
-                               Instant saleStart, Instant saleEnd, Instant pickupStart, Instant pickupEnd);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.QueryHints(@jakarta.persistence.QueryHint(name="jakarta.persistence.lock.timeout", value="3000"))
