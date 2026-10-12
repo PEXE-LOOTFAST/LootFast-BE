@@ -209,6 +209,47 @@ public class GlobalExceptionHandler {
             .body(ApiResponse.error(ApiError.of("RESOURCE_BUSY", "Resource is busy; retry with the same key")));
     }
 
+    // Vi phạm ràng buộc dữ liệu (unique...) — thường do race giữa pre-check và commit.
+    // Map về 409 theo tên constraint thay vì để rơi vào catch-all INTERNAL_ERROR (500).
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(
+            org.springframework.dao.DataIntegrityViolationException ex,
+            HttpServletRequest request
+    ) {
+        String details = constraintDetails(ex);
+        ErrorCode errorCode;
+        String message;
+        if (details.contains("uk_users_email")) {
+            errorCode = ErrorCode.DUPLICATE_EMAIL;
+            message = "Email is already registered";
+        } else if (details.contains("uk_users_phone_number")) {
+            errorCode = ErrorCode.DUPLICATE_PHONE;
+            message = "Phone number is already registered";
+        } else {
+            // Ràng buộc khác chưa map riêng: vẫn trả 409 (không lộ 500) và log để điều tra.
+            log.warn("Unmapped data integrity violation on {} {}",
+                    request.getMethod(), request.getRequestURI(), ex);
+            errorCode = ErrorCode.CONTENT_CONFLICT;
+            message = "Request conflicts with existing data";
+        }
+        return ResponseEntity
+                .status(errorCode.getStatus())
+                .body(ApiResponse.error(ApiError.of(errorCode.name(), message)));
+    }
+
+    // Gom message toàn bộ chuỗi cause để dò tên constraint (Postgres nhét tên vào message lỗi).
+    private String constraintDetails(Throwable ex) {
+        StringBuilder details = new StringBuilder();
+        Throwable cause = ex;
+        for (int depth = 0; cause != null && depth < 10; depth++) {
+            if (cause.getMessage() != null) {
+                details.append(cause.getMessage()).append(' ');
+            }
+            cause = cause.getCause();
+        }
+        return details.toString().toLowerCase(java.util.Locale.ROOT);
+    }
+
     // Catch-all — log đầy đủ cho dev, client chỉ nhận INTERNAL_ERROR (không lộ stack trace)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(

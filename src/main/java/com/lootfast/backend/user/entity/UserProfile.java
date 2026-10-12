@@ -106,6 +106,10 @@ public class UserProfile {
         this.avatarUrl = url;
     }
 
+    public void rename(String displayName) {
+        this.displayName = displayName;
+    }
+
     public void updateDiscoveryPreferences(
             String pickupArea,
             Iterable<String> categoryCodes

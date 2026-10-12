@@ -5,6 +5,7 @@ import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.dto.CurrentUserResponse;
 import com.lootfast.backend.user.dto.DiscoveryPreferencesResponse;
 import com.lootfast.backend.user.dto.UpdateDiscoveryPreferencesRequest;
+import com.lootfast.backend.user.dto.UpdateProfileRequest;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserProfile;
 import com.lootfast.backend.user.repository.UserProfileRepository;
@@ -39,6 +40,47 @@ public class CurrentUserService {
                         "Authenticated user is no longer available"));
         UserProfile profile = userProfileRepository.findByUserId(userId).orElse(null);
 
+        return buildResponse(user, profile);
+    }
+
+    @Transactional(timeout = 5)
+    public CurrentUserResponse updateProfile(String subject, UpdateProfileRequest request) {
+        Long userId = parseUserId(subject);
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND,
+                        "Authenticated user is no longer available"));
+
+        String firstName = trimToNull(request.firstName());
+        String lastName = trimToNull(request.lastName());
+        String phoneNumber = trimToNull(request.phoneNumber());
+        String displayName = trimToNull(request.displayName());
+
+        // Chỉ kiểm tra trùng khi số điện thoại thực sự đổi (tránh báo trùng chính nó).
+        if (phoneNumber != null
+                && !phoneNumber.equals(user.getPhoneNumber())
+                && userRepository.existsByPhoneNumber(phoneNumber)) {
+            throw new ApiException(ErrorCode.DUPLICATE_PHONE,
+                    "Phone number is already registered");
+        }
+
+        // Partial update: field null giữ nguyên giá trị cũ.
+        user.updateBasicInfo(
+                firstName != null ? firstName : user.getFirstName(),
+                lastName != null ? lastName : user.getLastName(),
+                phoneNumber != null ? phoneNumber : user.getPhoneNumber()
+        );
+
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+                .orElseGet(() -> new UserProfile(user, defaultDisplayName(user)));
+        if (displayName != null) {
+            profile.rename(displayName);
+        }
+        userProfileRepository.save(profile);
+
+        return buildResponse(user, profile);
+    }
+
+    private CurrentUserResponse buildResponse(User user, UserProfile profile) {
         return new CurrentUserResponse(
                 user.getPublicId(),
                 user.getFirstName(),
@@ -55,6 +97,14 @@ public class CurrentUserService {
                         : profile.getFavoriteCategories(),
                 user.getCreatedAt()
         );
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Transactional(timeout = 5)
