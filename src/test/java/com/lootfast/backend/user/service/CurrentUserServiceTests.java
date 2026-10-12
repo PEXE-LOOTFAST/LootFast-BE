@@ -3,9 +3,11 @@ package com.lootfast.backend.user.service;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.dto.CurrentUserResponse;
+import com.lootfast.backend.user.dto.UpdateProfileRequest;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserProfile;
 import com.lootfast.backend.user.entity.UserRole;
+import com.lootfast.backend.user.entity.UserStatus;
 import com.lootfast.backend.user.repository.UserProfileRepository;
 import com.lootfast.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,7 +24,10 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -118,5 +123,93 @@ class CurrentUserServiceTests {
 
         assertEquals(ErrorCode.USER_NOT_FOUND, ex.getErrorCode());
         assertEquals("Authenticated user is no longer available", ex.getMessage());
+    }
+
+    @Test
+    void updateProfileChangesOnlyProvidedFields() {
+        User user = newUser();
+        UserProfile profile = new UserProfile(user, "Kien foodie");
+        when(userRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(user));
+        when(userProfileRepository.findByUserId(42L)).thenReturn(Optional.of(profile));
+
+        CurrentUserResponse response = currentUserService.updateProfile(
+                "42",
+                new UpdateProfileRequest(null, null, null, "New display name"));
+
+        assertEquals("Kien", response.firstName());
+        assertEquals("Nguyen Van", response.lastName());
+        assertEquals("912345678", response.phoneNumber());
+        assertEquals("New display name", response.displayName());
+        // Không đổi số điện thoại thì không kiểm tra trùng.
+        verify(userRepository, never()).existsByPhoneNumber(any());
+    }
+
+    @Test
+    void updateProfileUpdatesNameAndPhoneWhenProvided() {
+        User user = newUser();
+        UserProfile profile = new UserProfile(user, "Kien foodie");
+        when(userRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(user));
+        when(userProfileRepository.findByUserId(42L)).thenReturn(Optional.of(profile));
+        when(userRepository.existsByPhoneNumber("900000000")).thenReturn(false);
+
+        CurrentUserResponse response = currentUserService.updateProfile(
+                "42",
+                new UpdateProfileRequest("Khanh", null, "900000000", null));
+
+        assertEquals("Khanh", response.firstName());
+        assertEquals("Nguyen Van", response.lastName());
+        assertEquals("900000000", response.phoneNumber());
+        assertEquals("Kien foodie", response.displayName());
+    }
+
+    @Test
+    void updateProfileRejectsDuplicatePhone() {
+        User user = newUser();
+        when(userRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(user));
+        when(userRepository.existsByPhoneNumber("900000000")).thenReturn(true);
+
+        ApiException ex = assertThrows(ApiException.class,
+                () -> currentUserService.updateProfile(
+                        "42",
+                        new UpdateProfileRequest(null, null, "900000000", null)));
+
+        assertEquals(ErrorCode.DUPLICATE_PHONE, ex.getErrorCode());
+    }
+
+    @Test
+    void updateProfileSkipsDuplicateCheckWhenPhoneUnchanged() {
+        User user = newUser();
+        UserProfile profile = new UserProfile(user, "Kien foodie");
+        when(userRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(user));
+        when(userProfileRepository.findByUserId(42L)).thenReturn(Optional.of(profile));
+
+        currentUserService.updateProfile(
+                "42",
+                new UpdateProfileRequest("Khanh", null, "912345678", null));
+
+        verify(userRepository, never()).existsByPhoneNumber(any());
+    }
+
+    @Test
+    void updateProfileRejectsDeletedUser() {
+        when(userRepository.findByIdForUpdate(42L)).thenReturn(Optional.empty());
+
+        ApiException ex = assertThrows(ApiException.class,
+                () -> currentUserService.updateProfile(
+                        "42",
+                        new UpdateProfileRequest("Khanh", null, null, null)));
+
+        assertEquals(ErrorCode.USER_NOT_FOUND, ex.getErrorCode());
+    }
+
+    private static User newUser() {
+        return new User(
+                "Kien",
+                "Nguyen Van",
+                "kien@gmail.com",
+                "912345678",
+                "hash",
+                UserRole.BUYER,
+                UserStatus.UNVERIFIED);
     }
 }
