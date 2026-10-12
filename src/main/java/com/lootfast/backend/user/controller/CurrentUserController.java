@@ -5,6 +5,7 @@ import com.lootfast.backend.user.dto.AvatarResponse;
 import com.lootfast.backend.user.dto.CurrentUserResponse;
 import com.lootfast.backend.user.dto.DiscoveryPreferencesResponse;
 import com.lootfast.backend.user.dto.UpdateDiscoveryPreferencesRequest;
+import com.lootfast.backend.user.dto.UpdateProfileRequest;
 import com.lootfast.backend.user.service.CurrentUserService;
 import com.lootfast.backend.user.service.UserAvatarService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -142,6 +143,38 @@ public class CurrentUserController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(
                 userAvatarService.uploadAvatar(jwt.getSubject(), file)
+        ));
+    }
+
+    @Operation(
+            summary = "Cập nhật thông tin cơ bản",
+            description = "Partial update thông tin cá nhân (tên, họ, số điện thoại, tên hiển thị) "
+                    + "cho user đang đăng nhập. Field nào không gửi sẽ giữ nguyên. "
+                    + "Không đổi email ở đây. Số điện thoại chỉ kiểm tra trùng, không xác thực OTP.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Cập nhật thành công, trả về profile mới nhất"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Dữ liệu không hợp lệ (ví dụ số điện thoại không đủ 9 chữ số)"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "409",
+                    description = "Số điện thoại đã được tài khoản khác sử dụng"
+            )
+    })
+    @PutMapping("/me/profile")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<CurrentUserResponse>> updateProfile(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody UpdateProfileRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                currentUserService.updateProfile(jwt.getSubject(), request)
         ));
     }
 

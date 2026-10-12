@@ -177,6 +177,16 @@ public class User {
         this.passwordHash = passwordHash;
     }
 
+    /**
+     * Cập nhật thông tin cơ bản. Email không đổi ở đây (cần luồng xác thực riêng).
+     * Caller chịu trách nhiệm kiểm tra trùng số điện thoại trước khi gọi.
+     */
+    public void updateBasicInfo(String firstName, String lastName, String phoneNumber) {
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.phoneNumber = phoneNumber;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
