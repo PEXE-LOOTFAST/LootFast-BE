@@ -173,6 +173,16 @@ public class User {
         this.status = UserStatus.VERIFIED;
     }
 
+    /** Discard credentials supplied before email ownership was proven. */
+    public void verifyWithGoogle() {
+        if (status != UserStatus.UNVERIFIED || isLocked()) {
+            throw new IllegalStateException("Only an unlocked pending account can be verified with Google");
+        }
+        passwordHash = null;
+        authenticationVersion++;
+        verify();
+    }
+
     public void changePassword(String passwordHash) {
         this.passwordHash = passwordHash;
     }

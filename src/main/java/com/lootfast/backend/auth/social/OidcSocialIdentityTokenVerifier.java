@@ -4,6 +4,8 @@ import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.config.SocialAuthProperties;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -16,6 +18,7 @@ import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -88,6 +91,11 @@ class OidcSocialIdentityTokenVerifier implements SocialIdentityTokenVerifier {
             throw invalidToken();
         }
 
+        // JwtTimestampValidator validates a present exp claim, but does not require it.
+        if (jwt.getExpiresAt() == null || rawNonce == null || rawNonce.isBlank()) {
+            throw invalidToken();
+        }
+
         String expectedNonce = provider == SocialProvider.APPLE
                 ? sha256Hex(rawNonce)
                 : rawNonce;
@@ -111,7 +119,9 @@ class OidcSocialIdentityTokenVerifier implements SocialIdentityTokenVerifier {
                 subject,
                 email,
                 value(jwt.getClaimAsString("given_name")),
-                value(jwt.getClaimAsString("family_name"))
+                value(jwt.getClaimAsString("family_name")),
+                provider != SocialProvider.GOOGLE || email.endsWith("@gmail.com")
+                        || !value(jwt.getClaimAsString("hd")).isBlank()
         );
     }
 
@@ -119,8 +129,12 @@ class OidcSocialIdentityTokenVerifier implements SocialIdentityTokenVerifier {
             SocialProvider provider,
             SocialAuthProperties.Provider providerProperties
     ) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(3));
+        requestFactory.setReadTimeout(Duration.ofSeconds(5));
         NimbusJwtDecoder.JwkSetUriJwtDecoderBuilder builder = NimbusJwtDecoder
-                .withJwkSetUri(providerProperties.jwkSetUri());
+                .withJwkSetUri(providerProperties.jwkSetUri())
+                .restOperations(new RestTemplate(requestFactory));
         if (provider == SocialProvider.APPLE) {
             builder.jwsAlgorithms(algorithms -> {
                 algorithms.add(SignatureAlgorithm.RS256);

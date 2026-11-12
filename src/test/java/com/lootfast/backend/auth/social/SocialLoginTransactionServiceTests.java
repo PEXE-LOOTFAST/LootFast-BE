@@ -2,6 +2,7 @@ package com.lootfast.backend.auth.social;
 
 import com.lootfast.backend.auth.dto.SocialLoginRequest;
 import com.lootfast.backend.auth.service.ConsentService;
+import com.lootfast.backend.auth.session.AuthSessionRepository;
 import com.lootfast.backend.user.entity.User;
 import com.lootfast.backend.user.entity.UserProfile;
 import com.lootfast.backend.user.entity.UserRole;
@@ -36,6 +37,7 @@ class SocialLoginTransactionServiceTests {
     @Mock private UserRepository userRepository;
     @Mock private UserProfileRepository userProfileRepository;
     @Mock private ConsentService consentService;
+    @Mock private AuthSessionRepository authSessionRepository;
 
     private SocialLoginTransactionService service;
 
@@ -46,6 +48,7 @@ class SocialLoginTransactionServiceTests {
                 userRepository,
                 userProfileRepository,
                 consentService,
+                authSessionRepository,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -110,6 +113,64 @@ class SocialLoginTransactionServiceTests {
         assertEquals(user, result);
         verify(userRepository, never()).save(any());
         verify(consentService, never()).recordRequiredConsents(any(), any(), any());
+    }
+
+    @Test
+    void thirdPartyGoogleEmailCannotAutomaticallyLinkAnExistingAccount() {
+        var identity = new SocialIdentityTokenVerifier.VerifiedSocialIdentity(
+                SocialProvider.GOOGLE, "subject", "user@example.com", "An", "Nguyen", false);
+        var user = new User("An", "Nguyen", "user@example.com", null, "hash",
+                UserRole.BUYER, UserStatus.VERIFIED);
+        when(userRepository.findByEmailForUpdate(identity.email())).thenReturn(Optional.of(user));
+
+        var error = org.junit.jupiter.api.Assertions.assertThrows(
+                com.lootfast.backend.common.exception.ApiException.class,
+                () -> service.findOrCreate(identity, request(false)));
+
+        assertEquals(com.lootfast.backend.common.exception.ErrorCode.SOCIAL_IDENTITY_CONFLICT,
+                error.getErrorCode());
+        verify(identityRepository, never()).saveAndFlush(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void googleWorkspaceVerifiedEmailCanLinkAnExistingVerifiedAccount() {
+        var identity = new SocialIdentityTokenVerifier.VerifiedSocialIdentity(
+                SocialProvider.GOOGLE, "subject", "user@example.com", "An", "Nguyen", true);
+        var user = new User("An", "Nguyen", "user@example.com", null, "hash",
+                UserRole.BUYER, UserStatus.VERIFIED);
+        when(userRepository.findByEmailForUpdate(identity.email())).thenReturn(Optional.of(user));
+
+        assertEquals(user, service.findOrCreate(identity, request(false)));
+        verify(identityRepository).saveAndFlush(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void alreadyLinkedGoogleSubjectStillLogsInAfterThirdPartyEmailChanges() {
+        var user = new User("An", "Nguyen", "old@example.com", null, null,
+                UserRole.BUYER, UserStatus.VERIFIED);
+        var identity = new SocialIdentityTokenVerifier.VerifiedSocialIdentity(
+                SocialProvider.GOOGLE, "stable-subject", "new@example.com", "An", "Nguyen", false);
+        when(identityRepository.findByProviderAndProviderSubject(SocialProvider.GOOGLE,
+                "stable-subject")).thenReturn(Optional.of(new ExternalAuthIdentity(user,
+                SocialProvider.GOOGLE, "stable-subject", "old@example.com", NOW)));
+
+        assertEquals(user, service.findOrCreate(identity, request(false)));
+        verify(userRepository, never()).findByEmailForUpdate(any());
+    }
+
+    @Test
+    void missingConsentDoesNotCreateUserOrLinkIdentity() {
+        var identity = new SocialIdentityTokenVerifier.VerifiedSocialIdentity(
+                SocialProvider.GOOGLE, "subject", "user@gmail.com", "An", "Nguyen");
+        var error = org.junit.jupiter.api.Assertions.assertThrows(
+                com.lootfast.backend.common.exception.ApiException.class,
+                () -> service.findOrCreate(identity, request(false)));
+        assertEquals(com.lootfast.backend.common.exception.ErrorCode.CONSENT_REQUIRED,
+                error.getErrorCode());
+        verify(userRepository, never()).save(any());
+        verify(identityRepository, never()).saveAndFlush(any());
     }
 
     private SocialLoginRequest request(boolean includeRegistrationFields) {

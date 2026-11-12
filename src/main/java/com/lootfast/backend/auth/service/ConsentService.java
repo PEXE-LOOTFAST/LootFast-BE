@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.ArrayList;
 
 @Service
 public class ConsentService {
@@ -31,19 +32,16 @@ public class ConsentService {
         legal.requireCurrentConsent(ConsentDocument.TERMS_OF_USE, termsVersion);
         legal.requireCurrentConsent(ConsentDocument.PRIVACY_POLICY, privacyPolicyVersion);
         Instant acceptedAt = clock.instant();
-        consentRepository.saveAll(List.of(
-                new UserConsent(
-                        user,
-                        ConsentDocument.TERMS_OF_USE,
-                        termsVersion.trim(),
-                        acceptedAt
-                ),
-                new UserConsent(
-                        user,
-                        ConsentDocument.PRIVACY_POLICY,
-                        privacyPolicyVersion.trim(),
-                        acceptedAt
-                )
-        ));
+        List<UserConsent> missing = new ArrayList<>();
+        for (UserConsent consent : List.of(
+                new UserConsent(user, ConsentDocument.TERMS_OF_USE, termsVersion.trim(), acceptedAt),
+                new UserConsent(user, ConsentDocument.PRIVACY_POLICY, privacyPolicyVersion.trim(), acceptedAt)
+        )) {
+            if (!consentRepository.existsByUser_IdAndDocumentAndDocumentVersion(
+                    user.getId(), consent.getDocument(), consent.getDocumentVersion())) {
+                missing.add(consent);
+            }
+        }
+        if (!missing.isEmpty()) consentRepository.saveAll(missing);
     }
 }
