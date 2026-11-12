@@ -33,4 +33,8 @@ public record SocialLoginRequest(
         @Size(max = 50, message = "Privacy policy version must not exceed 50 characters")
         String privacyPolicyVersion
 ) {
+    @Override
+    public String toString() {
+        return "SocialLoginRequest[provider=" + provider + ", credentials=REDACTED]";
+    }
 }

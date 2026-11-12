@@ -2,6 +2,7 @@ package com.lootfast.backend.auth.social;
 
 import com.lootfast.backend.auth.dto.SocialLoginRequest;
 import com.lootfast.backend.auth.service.ConsentService;
+import com.lootfast.backend.auth.session.AuthSessionRepository;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
 import com.lootfast.backend.user.entity.User;
@@ -22,6 +23,7 @@ public class SocialLoginTransactionService {
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final ConsentService consentService;
+    private final AuthSessionRepository authSessionRepository;
     private final Clock clock;
 
     public SocialLoginTransactionService(
@@ -29,16 +31,18 @@ public class SocialLoginTransactionService {
             UserRepository userRepository,
             UserProfileRepository userProfileRepository,
             ConsentService consentService,
+            AuthSessionRepository authSessionRepository,
             Clock clock
     ) {
         this.identityRepository = identityRepository;
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.consentService = consentService;
+        this.authSessionRepository = authSessionRepository;
         this.clock = clock;
     }
 
-    @Transactional
+    @Transactional(timeout = 5)
     public User findOrCreate(
             SocialIdentityTokenVerifier.VerifiedSocialIdentity identity,
             SocialLoginRequest request
@@ -56,13 +60,29 @@ public class SocialLoginTransactionService {
 
         User user = userRepository.findByEmailForUpdate(identity.email()).orElse(null);
         if (user == null) {
-            validateNewAccount(request);
+            validateRegistrationConsent(request);
             user = createSocialUser(identity, request);
-        } else if (user.getStatus() != UserStatus.VERIFIED) {
-            throw new ApiException(
-                    ErrorCode.ACCOUNT_NOT_VERIFIED,
-                    "Verify the existing LootFast account before linking social login"
-            );
+        } else {
+            if (user.isLocked()) throw new ApiException(ErrorCode.ACCOUNT_LOCKED);
+            if (user.getStatus() != UserStatus.VERIFIED) {
+                if (user.getStatus() != UserStatus.UNVERIFIED
+                        || identity.provider() != SocialProvider.GOOGLE
+                        || !identity.authoritativeEmail()) {
+                    throw new ApiException(ErrorCode.ACCOUNT_NOT_VERIFIED,
+                            "Verify the existing LootFast account before linking social login");
+                }
+                validateRegistrationConsent(request);
+                user.verifyWithGoogle();
+                consentService.recordRequiredConsents(user, request.termsVersion(), request.privacyPolicyVersion());
+                // This bulk update flushes and clears the persistence context. Reload the
+                // locked user afterwards so role loading and session creation remain safe.
+                authSessionRepository.revokeActiveSessions(user.getId(), clock.instant());
+                user = userRepository.findByEmailForUpdate(identity.email()).orElseThrow();
+            }
+            if (identity.provider() == SocialProvider.GOOGLE && !identity.authoritativeEmail()) {
+                throw new ApiException(ErrorCode.SOCIAL_IDENTITY_CONFLICT,
+                        "Sign in with the existing LootFast credentials; automatic Google linking is unavailable for this email");
+            }
         }
 
         if (user.isLocked()) throw new ApiException(ErrorCode.ACCOUNT_LOCKED);
@@ -104,7 +124,7 @@ public class SocialLoginTransactionService {
         return user;
     }
 
-    private void validateNewAccount(SocialLoginRequest request) {
+    private void validateRegistrationConsent(SocialLoginRequest request) {
         if (!Boolean.TRUE.equals(request.termsAccepted())
                 || !Boolean.TRUE.equals(request.privacyPolicyAccepted())
                 || isBlank(request.termsVersion())
