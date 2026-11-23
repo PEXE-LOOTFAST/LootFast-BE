@@ -156,7 +156,7 @@ public class MerchantDealService {
         List<DealImage> images = requireVisibleDealRules(merchant, deal);
         deal.publish(images.getFirst().getImageUrl());
         dealRepository.flush();
-        matchingDealNotificationService.createForPublishedDeal(deal);
+        matchingDealNotificationService.enqueue(deal);
         premiumNotifications.published(deal);
         return MerchantDealResponse.from(deal, images);
     }

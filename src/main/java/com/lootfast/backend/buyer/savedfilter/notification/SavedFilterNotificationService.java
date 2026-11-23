@@ -2,11 +2,17 @@ package com.lootfast.backend.buyer.savedfilter.notification;
 
 import com.lootfast.backend.deal.entity.Deal;
 import com.lootfast.backend.deal.repository.DealRepository;
+import com.lootfast.backend.notification.dto.NotificationResponse;
+import com.lootfast.backend.notification.entity.DealMatchReason;
+import com.lootfast.backend.notification.entity.NotificationType;
+import com.lootfast.backend.notification.event.NotificationCreatedEvent;
 import com.lootfast.backend.notification.outbox.EmailOutboxService;
 import java.sql.Timestamp;
 import java.time.*;
 import java.util.*;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
+import java.sql.Statement;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
 import org.springframework.web.util.HtmlUtils;
@@ -19,18 +25,21 @@ public class SavedFilterNotificationService {
   private final SavedFilterRecipientRepository recipients;
   private final EmailOutboxService emails;
   private final Clock clock;
+  private final ApplicationEventPublisher events;
 
   public SavedFilterNotificationService(
       JdbcTemplate jdbc,
       DealRepository deals,
       SavedFilterRecipientRepository recipients,
       EmailOutboxService emails,
-      Clock clock) {
+      Clock clock,
+      ApplicationEventPublisher events) {
     this.jdbc = jdbc;
     this.deals = deals;
     this.recipients = recipients;
     this.emails = emails;
     this.clock = clock;
+    this.events = events;
   }
 
   @Transactional(propagation = Propagation.MANDATORY)
@@ -123,13 +132,33 @@ limit 1 for update skip locked
             Timestamp.from(now)
           });
     }
-    jdbc.batchUpdate(
+    int[] inserted = jdbc.batchUpdate(
         """
 insert into notifications(public_id,recipient_user_id,type,match_reason,deal_public_id,store_public_id,title,message,image_url,created_at)
 values (?,?,'MATCHING_DEAL','SAVED_FILTER',?,?,?,?,?,?)
 on conflict(recipient_user_id,type,deal_public_id) where type='MATCHING_DEAL' do nothing
 """,
         args);
+    for (int i = 0; i < inserted.length; i++) {
+      if (inserted[i] > 0 || inserted[i] == Statement.SUCCESS_NO_INFO) {
+        events.publishEvent(
+            new NotificationCreatedEvent(
+                ids.get(i),
+                new NotificationResponse(
+                    notificationIds.get(i),
+                    NotificationType.MATCHING_DEAL,
+                    DealMatchReason.SAVED_FILTER,
+                    deal.getPublicId(),
+                    null,
+                    deal.getMerchant().getUser().getPublicId(),
+                    title,
+                    message,
+                    deal.getPrimaryImageUrl(),
+                    false,
+                    now,
+                    null)));
+      }
+    }
     String body =
         "<h2>"
             + HtmlUtils.htmlEscape(title)

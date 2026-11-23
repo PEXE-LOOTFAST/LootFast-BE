@@ -116,6 +116,29 @@ storage:
     api-secret: ${CLOUDINARY_API_SECRET:}
 
 lootfast:
+  # Realtime notifications (STOMP over WebSocket at /ws). REDIS relays events between
+  # instances via Redis pub/sub; LOCAL delivers only inside this process.
+  realtime:
+    relay: redis
+    connect-timeout: 30s
+    session-sweep-interval: 30s
+  # Preference-based "matching deal" notifications (see MatchingProperties for semantics).
+  notifications:
+    matching:
+      worker-enabled: true
+      threshold: 30
+      daily-limit: 5
+      order-history-window: 30d
+      order-history-min-orders: 2
+      batch-size: 500
+      zone: Asia/Ho_Chi_Minh
+      weights:
+        favorite-store: 50
+        favorite-category: 40
+        favorite-item: 40
+        order-history: 30
+        nearby-area: 20
+        big-discount: 10
   vnpay:
     enabled: ${VNPAY_ENABLED:false}
     tmn-code: ${VNPAY_TMN_CODE:}

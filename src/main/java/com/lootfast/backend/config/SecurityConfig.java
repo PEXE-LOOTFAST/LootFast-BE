@@ -62,6 +62,10 @@ public class SecurityConfig {
                                 "/api/v1/auth/social/login",
                                 "/actuator/health",
                                 "/actuator/health/**",
+                                // WebSocket handshake cannot carry a bearer header from browsers;
+                                // the JWT is verified on the STOMP CONNECT frame instead
+                                // (see StompAuthChannelInterceptor).
+                                "/ws",
                                 "/v3/api-docs/**",
                                 "/swagger-ui",
                                 "/swagger-ui.html",
