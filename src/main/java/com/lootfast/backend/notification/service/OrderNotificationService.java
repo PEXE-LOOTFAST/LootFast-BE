@@ -1,6 +1,8 @@
 package com.lootfast.backend.notification.service;
 
 import com.lootfast.backend.notification.entity.*;
+import com.lootfast.backend.notification.dto.NotificationResponse;
+import com.lootfast.backend.notification.event.NotificationCreatedEvent;
 import com.lootfast.backend.notification.event.OrderEmailEvent;
 import com.lootfast.backend.notification.repository.*;
 import com.lootfast.backend.order.entity.CustomerOrder;
@@ -76,6 +78,7 @@ public class OrderNotificationService {
                     + format.format(order.getPickupEnd()) + ".";
         }
         var notification = notifications.save(new UserNotification(recipient, type, order, occurrenceKey, title, message));
+        events.publishEvent(new NotificationCreatedEvent(recipient.getId(), NotificationResponse.from(notification)));
         if (preference != null && preference.isEmailEnabled()) {
             events.publishEvent(new OrderEmailEvent(recipient.getEmail(), notification.getPublicId(), title, message));
         }
