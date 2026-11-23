@@ -6,8 +6,10 @@ import com.lootfast.backend.common.response.PagedResponse;
 import com.lootfast.backend.notification.dto.NotificationResponse;
 import com.lootfast.backend.notification.dto.ReadAllNotificationsResponse;
 import com.lootfast.backend.notification.dto.UnreadNotificationCountResponse;
+import com.lootfast.backend.notification.event.UnreadCountChangedEvent;
 import com.lootfast.backend.notification.repository.UserNotificationRepository;
 import com.lootfast.backend.user.repository.UserRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -24,15 +26,18 @@ public class UserNotificationService {
     private final UserNotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     public UserNotificationService(
             UserNotificationRepository notificationRepository,
             UserRepository userRepository,
-            Clock clock
+            Clock clock,
+            ApplicationEventPublisher events
     ) {
         this.notificationRepository = notificationRepository;
         this.userRepository = userRepository;
         this.clock = clock;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -68,16 +73,25 @@ public class UserNotificationService {
                         ErrorCode.NOTIFICATION_NOT_FOUND,
                         "Notification was not found"
                 ));
-        notification.markRead(clock.instant());
+        if (notification.getReadAt() == null) {
+            notification.markRead(clock.instant());
+            notificationRepository.flush();
+            events.publishEvent(new UnreadCountChangedEvent(
+                    userId,
+                    notificationRepository.countByRecipientIdAndReadAtIsNull(userId)
+            ));
+        }
         return NotificationResponse.from(notification);
     }
 
     @Transactional(timeout = 5)
     public ReadAllNotificationsResponse markAllRead(String subject) {
         Long userId = requireExistingUser(subject);
-        return new ReadAllNotificationsResponse(
-                notificationRepository.markAllRead(userId, clock.instant())
-        );
+        int updated = notificationRepository.markAllRead(userId, clock.instant());
+        if (updated > 0) {
+            events.publishEvent(new UnreadCountChangedEvent(userId, 0));
+        }
+        return new ReadAllNotificationsResponse(updated);
     }
 
     private Long requireExistingUser(String subject) {
