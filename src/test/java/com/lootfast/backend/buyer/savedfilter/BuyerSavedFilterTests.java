@@ -20,6 +20,8 @@ import com.lootfast.backend.notification.entity.*;
 import com.lootfast.backend.notification.outbox.*;
 import com.lootfast.backend.notification.repository.*;
 import com.lootfast.backend.notification.service.MatchingDealNotificationService;
+import com.lootfast.backend.favorite.entity.UserFavorite;
+import com.lootfast.backend.favorite.repository.UserFavoriteRepository;
 import com.lootfast.backend.premium.dto.*;
 import com.lootfast.backend.premium.service.PremiumEntitlementService;
 import com.lootfast.backend.user.entity.*;
@@ -53,6 +55,7 @@ abstract class BuyerSavedFilterTests {
   @Autowired NotificationPreferenceRepository preferences;
   @Autowired UserNotificationRepository notifications;
   @Autowired MatchingDealNotificationService basicAlerts;
+  @Autowired UserFavoriteRepository favorites;
   @Autowired PlatformTransactionManager tm;
   @MockitoSpyBean EmailOutboxService queuedEmails;
   @Autowired PremiumEntitlementService premium;
@@ -589,7 +592,9 @@ abstract class BuyerSavedFilterTests {
     grant();
     enabledFilter();
     var d = alertDeal();
-    basicAlerts.createForPublishedDeal(d);
+    favorites.save(UserFavorite.store(buyer, d.getMerchant()));
+    basicAlerts.enqueue(d);
+    while (basicAlerts.processNextJob()) {}
     assertEquals(1, matchingCount(d));
     alerts.published(d);
     alerts.processBatch();
