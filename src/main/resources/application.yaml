@@ -116,6 +116,12 @@ storage:
     api-secret: ${CLOUDINARY_API_SECRET:}
 
 lootfast:
+  # Realtime notifications (STOMP over WebSocket at /ws). REDIS relays events between
+  # instances via Redis pub/sub; LOCAL delivers only inside this process.
+  realtime:
+    relay: redis
+    connect-timeout: 30s
+    session-sweep-interval: 30s
   vnpay:
     enabled: ${VNPAY_ENABLED:false}
     tmn-code: ${VNPAY_TMN_CODE:}
