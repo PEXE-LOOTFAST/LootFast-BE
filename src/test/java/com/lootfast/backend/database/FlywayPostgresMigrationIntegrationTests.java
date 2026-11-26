@@ -10,10 +10,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers(disabledWithoutDocker = true)
@@ -77,9 +79,11 @@ class FlywayPostgresMigrationIntegrationTests {
         // price/pickup snapshots, deal lifecycle, payment audit, verification badge,
         // notification preferences, matching-deal notifications, store reports,
         // the merchant review flag, merchant sanctions, support tickets, store
-        // reviews (V45), the buyer pickup-slot columns (V46) and the deal-match
-        // jobs with food-preference match reasons (V47), apply on V11.
-        assertEquals(36, result.migrationsExecuted);
+        // reviews (V45), the buyer pickup-slot columns (V46), the deal-match
+        // jobs with food-preference match reasons (V47) and the relaxed deal price
+        // rule (V48), apply on V11.
+        assertEquals(37, result.migrationsExecuted);
+        assertDealPriceRule(jdbcUrl);
         try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
              var statement = connection.createStatement();
              var rows = statement.executeQuery("""
@@ -293,6 +297,23 @@ class FlywayPostgresMigrationIntegrationTests {
             assertEquals(1, statement.executeUpdate());
         }
         return new ExistingMerchant(userId, profileId);
+    }
+
+    /** V48: any discount is accepted, but a deal can no longer cost as much as the original. */
+    private void assertDealPriceRule(String jdbcUrl) throws Exception {
+        try (var connection = DriverManager.getConnection(jdbcUrl, USERNAME, PASSWORD);
+             var statement = connection.createStatement()) {
+            assertEquals(1, statement.executeUpdate(
+                    "update deals set discounted_price = 95000 where name = 'Bánh mì đặc biệt'"
+            ));
+            assertThrows(SQLException.class, () -> statement.executeUpdate(
+                    "update deals set discounted_price = original_price"
+                            + " where name = 'Bánh mì đặc biệt'"
+            ));
+            assertEquals(1, statement.executeUpdate(
+                    "update deals set discounted_price = 50000 where name = 'Bánh mì đặc biệt'"
+            ));
+        }
     }
 
     private void insertExistingDeal(String jdbcUrl, long profileId) throws Exception {
