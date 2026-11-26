@@ -268,22 +268,20 @@ class MerchantDealServiceIntegrationTests {
     }
 
     @Test
-    void discountMustBeAtLeastTenPercent() {
-        CreateMerchantDealRequest invalid = new CreateMerchantDealRequest(
-                "Small discount",
-                "BAKERY",
-                BigDecimal.valueOf(100_000),
-                BigDecimal.valueOf(95_000),
-                10,
-                10,
-                SALE_START,
-                SALE_END
+    void anyDiscountIsAllowedWhileTheDealCostsLessThanTheOriginal() {
+        MerchantDealResponse smallDiscount = dealService.create(
+                subject(),
+                priceRequest(100_000, 95_000)
         );
-        ApiException exception = assertThrows(
-                ApiException.class,
-                () -> dealService.create(subject(), invalid)
-        );
-        assertEquals(ErrorCode.INVALID_DEAL_PRICE, exception.getErrorCode());
+        assertEquals(5, smallDiscount.discountPercent());
+
+        for (long discountedPrice : new long[] {100_000, 120_000}) {
+            ApiException exception = assertThrows(
+                    ApiException.class,
+                    () -> dealService.create(subject(), priceRequest(100_000, discountedPrice))
+            );
+            assertEquals(ErrorCode.INVALID_DEAL_PRICE, exception.getErrorCode());
+        }
     }
 
     @Test
@@ -387,6 +385,19 @@ class MerchantDealServiceIntegrationTests {
     private MerchantDealResponse createWithImage(CreateMerchantDealRequest request) throws Exception {
         MerchantDealResponse draft = dealService.create(subject(), request);
         return imageService.upload(subject(), draft.dealId(), validPng());
+    }
+
+    private CreateMerchantDealRequest priceRequest(long originalPrice, long discountedPrice) {
+        return new CreateMerchantDealRequest(
+                "Price rule",
+                "BAKERY",
+                BigDecimal.valueOf(originalPrice),
+                BigDecimal.valueOf(discountedPrice),
+                10,
+                10,
+                SALE_START,
+                SALE_END
+        );
     }
 
     private CreateMerchantDealRequest validRequest(String name) {

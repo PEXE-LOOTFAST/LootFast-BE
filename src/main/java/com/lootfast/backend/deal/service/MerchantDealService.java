@@ -286,11 +286,11 @@ public class MerchantDealService {
     private NormalizedDeal validateAndNormalize(CreateMerchantDealRequest request) {
         BigDecimal originalPrice = money(request.originalPrice());
         BigDecimal discountedPrice = money(request.discountedPrice());
-        if (discountedPrice.multiply(BigDecimal.valueOf(100))
-                .compareTo(originalPrice.multiply(BigDecimal.valueOf(90))) > 0) {
+        // The merchant picks any discount; a deal only has to cost less than the original.
+        if (discountedPrice.compareTo(originalPrice) >= 0) {
             throw new ApiException(
                     ErrorCode.INVALID_DEAL_PRICE,
-                    "Discounted price must be at least 10% below the original price"
+                    "Discounted price must be lower than the original price"
             );
         }
         validateSchedule(request.saleStartsAt(), request.saleEndsAt());
