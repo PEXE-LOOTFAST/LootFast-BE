@@ -123,7 +123,9 @@ public class SavedFilterDealRepository {
                       r.getString("ward"),
                       r.getString("district"),
                       r.getString("city"),
-                      r.getBoolean("verified")));
+                      r.getBoolean("verified")),
+                  false,
+                  null);
             });
     return new PagedResponse<>(rows, page, size, total, Math.toIntExact((total + size - 1) / size));
   }
