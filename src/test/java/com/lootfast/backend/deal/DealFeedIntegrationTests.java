@@ -3,6 +3,8 @@ package com.lootfast.backend.deal;
 import com.lootfast.backend.common.response.PagedResponse;
 import com.lootfast.backend.common.exception.ApiException;
 import com.lootfast.backend.common.exception.ErrorCode;
+import com.lootfast.backend.deal.demo.DemoDealConfig;
+import com.lootfast.backend.deal.demo.DemoDealGenerator;
 import com.lootfast.backend.deal.dto.DealDetailResponse;
 import com.lootfast.backend.deal.dto.DealDiscoveryQuery;
 import com.lootfast.backend.deal.dto.DealFeedItemResponse;
@@ -42,6 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         DealFeedService.class,
         DealDetailService.class,
         DealResponseMapper.class,
+        DemoDealConfig.class,
+        DemoDealGenerator.class,
         com.lootfast.backend.review.service.StoreRatingService.class,
         DealFeedIntegrationTests.FixedClockConfig.class
 })
@@ -77,6 +81,20 @@ class DealFeedIntegrationTests {
         assertEquals("Near bakery", response.items().get(0).name());
         assertEquals("Far bakery", response.items().get(1).name());
         assertTrue(response.items().get(0).merchant().verified());
+    }
+
+    @Test
+    void feedAddsNoDemoDealsWhenTheFeatureIsDisabled() {
+        PagedResponse<DealFeedItemResponse> response = dealFeedService.getFeed(
+                21.028511,
+                105.804817,
+                1.0,
+                0,
+                20
+        );
+
+        assertEquals(0, response.totalElements());
+        assertTrue(response.items().isEmpty());
     }
 
     @Test

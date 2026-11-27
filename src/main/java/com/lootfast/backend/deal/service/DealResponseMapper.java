@@ -1,8 +1,10 @@
 package com.lootfast.backend.deal.service;
 
+import com.lootfast.backend.deal.demo.DemoDeal;
 import com.lootfast.backend.deal.dto.DealDetailResponse;
 import com.lootfast.backend.deal.dto.DealFeedItemResponse;
 import com.lootfast.backend.deal.entity.Deal;
+import com.lootfast.backend.deal.entity.DealStatus;
 import com.lootfast.backend.merchant.entity.MerchantProfile;
 import com.lootfast.backend.review.service.StoreRatingService;
 import org.springframework.stereotype.Component;
@@ -26,7 +28,7 @@ public class DealResponseMapper {
                 deal.getCategoryCode(),
                 deal.getOriginalPrice(),
                 deal.getDiscountedPrice(),
-                discountPercent(deal),
+                discountPercent(deal.getOriginalPrice(), deal.getDiscountedPrice()),
                 deal.getRemainingQuantity(),
                 deal.getPrimaryImageUrl(),
                 deal.getPreparationMinutes(),
@@ -41,7 +43,37 @@ public class DealResponseMapper {
                         merchant.getDistrict(),
                         merchant.getCity(),
                         merchant.isVerified()
-                )
+                ),
+                false,
+                null
+        );
+    }
+
+    public DealFeedItemResponse toFeedItem(DemoDeal deal, BigDecimal distanceKm) {
+        return new DealFeedItemResponse(
+                deal.id(),
+                deal.name(),
+                deal.categoryCode(),
+                deal.originalPrice(),
+                deal.discountedPrice(),
+                discountPercent(deal.originalPrice(), deal.discountedPrice()),
+                deal.remainingQuantity(),
+                null,
+                deal.preparationMinutes(),
+                deal.pickupStart(),
+                deal.pickupEnd(),
+                distanceKm,
+                new DealFeedItemResponse.MerchantSummary(
+                        deal.storeId(),
+                        deal.storeName(),
+                        DemoDeal.ADDRESS_LINE,
+                        null,
+                        null,
+                        null,
+                        false
+                ),
+                true,
+                DemoDeal.NOTICE
         );
     }
 
@@ -54,7 +86,7 @@ public class DealResponseMapper {
                 deal.getCategoryCode(),
                 deal.getOriginalPrice(),
                 deal.getDiscountedPrice(),
-                discountPercent(deal),
+                discountPercent(deal.getOriginalPrice(), deal.getDiscountedPrice()),
                 deal.getRemainingQuantity(),
                 deal.getPrimaryImageUrl(),
                 deal.getPreparationMinutes(),
@@ -76,15 +108,52 @@ public class DealResponseMapper {
                         merchant.getDistrict(),
                         merchant.getCity(),
                         merchant.isVerified()
-                )
+                ),
+                false,
+                null
         );
     }
 
-    private int discountPercent(Deal deal) {
-        return deal.getOriginalPrice()
-                .subtract(deal.getDiscountedPrice())
+    public DealDetailResponse toDetail(DemoDeal deal, BigDecimal distanceKm) {
+        return new DealDetailResponse(
+                deal.id(),
+                deal.name(),
+                deal.categoryCode(),
+                deal.originalPrice(),
+                deal.discountedPrice(),
+                discountPercent(deal.originalPrice(), deal.discountedPrice()),
+                deal.remainingQuantity(),
+                null,
+                deal.preparationMinutes(),
+                deal.pickupStart(),
+                deal.pickupEnd(),
+                deal.availableFrom(),
+                deal.availableUntil(),
+                DealStatus.ACTIVE,
+                distanceKm,
+                0,
+                deal.availableFrom(),
+                new DealDetailResponse.RatingSummary(null, 0),
+                new DealDetailResponse.MerchantDetail(
+                        deal.storeId(),
+                        deal.storeName(),
+                        null,
+                        DemoDeal.ADDRESS_LINE,
+                        null,
+                        null,
+                        null,
+                        false
+                ),
+                true,
+                DemoDeal.NOTICE
+        );
+    }
+
+    private static int discountPercent(BigDecimal originalPrice, BigDecimal discountedPrice) {
+        return originalPrice
+                .subtract(discountedPrice)
                 .multiply(BigDecimal.valueOf(100))
-                .divide(deal.getOriginalPrice(), 0, RoundingMode.HALF_UP)
+                .divide(originalPrice, 0, RoundingMode.HALF_UP)
                 .intValueExact();
     }
 }

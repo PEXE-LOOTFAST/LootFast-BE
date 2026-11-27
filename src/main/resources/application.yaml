@@ -139,6 +139,12 @@ lootfast:
         order-history: 30
         nearby-area: 20
         big-discount: 10
+  # Deal minh họa (không có thật, không thể đặt) sinh quanh vị trí người mua khi khu vực
+  # chưa có deal thật phù hợp. Không lưu vào database; tắt mặc định.
+  demo-deals:
+    enabled: ${DEMO_DEALS_ENABLED:false}
+    max-per-feed: 2
+    zone: Asia/Ho_Chi_Minh
   vnpay:
     enabled: ${VNPAY_ENABLED:false}
     tmn-code: ${VNPAY_TMN_CODE:}

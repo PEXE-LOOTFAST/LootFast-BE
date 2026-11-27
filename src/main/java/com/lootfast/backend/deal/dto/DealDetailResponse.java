@@ -1,6 +1,7 @@
 package com.lootfast.backend.deal.dto;
 
 import com.lootfast.backend.deal.entity.DealStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,7 +26,12 @@ public record DealDetailResponse(
         long inventoryVersion,
         Instant updatedAt,
         RatingSummary rating,
-        MerchantDetail merchant
+        MerchantDetail merchant,
+        @Schema(description = "true khi đây là deal minh họa, không có thật ngoài đời và không thể đặt. "
+                + "App cần hiện badge DEMO và ẩn nút đặt/yêu thích.")
+        boolean demo,
+        @Schema(description = "Thông báo hiển thị cho deal minh họa; null với deal thật.")
+        String demoNotice
 ) {
     public record RatingSummary(BigDecimal averageRating, long reviewCount) {
     }

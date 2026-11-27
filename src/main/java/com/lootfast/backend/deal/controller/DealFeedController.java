@@ -44,7 +44,9 @@ public class DealFeedController {
 
     @Operation(
             summary = "Tìm và lọc deal đang hoạt động theo vị trí",
-            description = "Tìm không dấu theo tên món/cửa hàng; lọc theo bán kính, danh mục, mức giảm và khoảng thời gian nhận. Kết quả được sắp xếp theo khoảng cách và phân trang."
+            description = "Tìm không dấu theo tên món/cửa hàng; lọc theo bán kính, danh mục, mức giảm và khoảng thời gian nhận. Kết quả được sắp xếp theo khoảng cách và phân trang. "
+                    + "Khi bật DEMO_DEALS_ENABLED và khu vực không có deal thật phù hợp, trả tối đa 2 deal minh họa "
+                    + "(demo=true, không có thật, không thể đặt)."
     )
     @GetMapping
     public ResponseEntity<ApiResponse<PagedResponse<DealFeedItemResponse>>> getFeed(
